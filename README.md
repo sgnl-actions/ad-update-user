@@ -13,6 +13,7 @@ Supports updating any combination of standard AD user attributes in a single cal
 - Network access to an Active Directory Domain Controller (LDAP port 389 or LDAPS port 636)
 - A service account with **Write** permissions on the target user objects
 - The Distinguished Name (DN) of the user to update
+- For password changes, LDAPS (port 636) is required by Active Directory
 
 ## Configuration
 
@@ -35,8 +36,8 @@ Supports updating any combination of standard AD user attributes in a single cal
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `userDN` | text | Yes | Distinguished Name of the user to update |
-| `attributes` | object | No | Key-value pairs of LDAP attributes to set |
 | `samAccountName` | text | No | SAM account name (maps to `sAMAccountName`) |
+| `userPrincipalName` | text | No | User principal name / UPN (maps to `userPrincipalName`) |
 | `firstName` | text | No | First name (maps to `givenName`) |
 | `lastName` | text | No | Last name (maps to `sn`) |
 | `displayName` | text | No | Display name (maps to `displayName`) |
@@ -45,8 +46,12 @@ Supports updating any combination of standard AD user attributes in a single cal
 | `department` | text | No | Department name (maps to `department`) |
 | `title` | text | No | Job title (maps to `title`) |
 | `address` | text | No | LDAP URL override (takes precedence over `ADDRESS` env var) |
+| `enabled` | boolean | No | Enable or disable the user account (sets `userAccountControl` to 512 or 514) |
+| `password` | text | No | New password for the user (encoded as `unicodePwd` UTF-16LE) |
+| `changePasswordAtNextLogin` | boolean | No | Force the user to change password at next login (sets `pwdLastSet` to `0`) |
+| `additionalAttributes` | object | No | Key-value pairs of additional LDAP attributes to set |
 
-At least one attribute must be provided, either via named parameters, the `attributes` object, or both. Named parameters take precedence over conflicting keys in `attributes`.
+At least one attribute must be provided, either via named parameters, the `additionalAttributes` object, or both. Named parameters take precedence over conflicting keys in `additionalAttributes`.
 
 ### Output
 
@@ -65,7 +70,7 @@ At least one attribute must be provided, either via named parameters, the `attri
 ```json
 {
   "userDN": "CN=John Doe,OU=Users,DC=example,DC=com",
-  "attributes": {
+  "additionalAttributes": {
     "displayName": "John Doe",
     "mail": "john.doe@example.com",
     "department": "Engineering"
@@ -86,17 +91,36 @@ At least one attribute must be provided, either via named parameters, the `attri
 }
 ```
 
-Named parameters can be combined with the `attributes` object for less common LDAP attributes:
+Named parameters can be combined with the `additionalAttributes` object for less common LDAP attributes:
 
 ```json
 {
   "userDN": "CN=John Doe,OU=Users,DC=example,DC=com",
   "firstName": "John",
   "email": "john.doe@example.com",
-  "attributes": {
+  "additionalAttributes": {
     "physicalDeliveryOfficeName": "Building A, Room 101",
     "telephoneNumber": "+1-555-0100"
   }
+}
+```
+
+### Enable/Disable a User Account
+
+```json
+{
+  "userDN": "CN=John Doe,OU=Users,DC=example,DC=com",
+  "enabled": false
+}
+```
+
+### Set a Password and Force Change at Next Login
+
+```json
+{
+  "userDN": "CN=John Doe,OU=Users,DC=example,DC=com",
+  "password": "N3wP@ssw0rd!",
+  "changePasswordAtNextLogin": true
 }
 ```
 
@@ -113,7 +137,10 @@ Named parameters can be combined with the `attributes` object for less common LD
   },
   "script_inputs": {
     "userDN": "CN=John Doe,OU=Users,DC=example,DC=com",
-    "attributes": {
+    "firstName": "John",
+    "email": "john.doe@example.com",
+    "enabled": true,
+    "additionalAttributes": {
       "displayName": "John Doe",
       "department": "Engineering",
       "title": "Software Engineer"
@@ -154,6 +181,7 @@ This action uses the LDAP `replace` modification type for each attribute. The `r
 | Named Parameter | LDAP Attribute |
 |-----------------|---------------|
 | `samAccountName` | `sAMAccountName` |
+| `userPrincipalName` | `userPrincipalName` |
 | `firstName` | `givenName` |
 | `lastName` | `sn` |
 | `displayName` | `displayName` |
@@ -161,6 +189,27 @@ This action uses the LDAP `replace` modification type for each attribute. The `r
 | `company` | `company` |
 | `department` | `department` |
 | `title` | `title` |
+
+### Special Parameters
+
+| Parameter | LDAP Attribute | Notes |
+|-----------|---------------|-------|
+| `enabled` | `userAccountControl` | `true` → `512` (normal account), `false` → `514` (disabled account) |
+| `password` | `unicodePwd` | Password is quoted and encoded as UTF-16LE Buffer per AD requirements. Requires LDAPS. |
+| `changePasswordAtNextLogin` | `pwdLastSet` | `true` → sets `pwdLastSet` to `0`, forcing password change at next login |
+
+### Password Encoding
+
+Active Directory requires passwords to be set via the `unicodePwd` attribute as a UTF-16LE encoded, double-quoted string. This action handles the encoding automatically -- simply pass the plaintext password as the `password` parameter.
+
+**Note:** Password changes require an LDAPS (SSL/TLS) connection. Attempting to set a password over unencrypted LDAP will be rejected by Active Directory.
+
+### User Account Control (UAC)
+
+The `enabled` parameter sets the `userAccountControl` attribute:
+
+- `enabled: true` → `512` (NORMAL_ACCOUNT)
+- `enabled: false` → `514` (NORMAL_ACCOUNT | ACCOUNTDISABLE)
 
 ### Common AD Attributes
 
@@ -184,7 +233,7 @@ Multi-valued attributes (e.g., `otherTelephone`, `proxyAddresses`) can be passed
 
 ```json
 {
-  "attributes": {
+  "additionalAttributes": {
     "otherTelephone": ["+1-555-0100", "+1-555-0101"]
   }
 }
@@ -218,6 +267,7 @@ Multi-valued attributes (e.g., `otherTelephone`, `proxyAddresses`) can be passed
 ## Security Considerations
 
 - Use LDAPS (port 636) in production to encrypt credentials and data in transit
+- LDAPS is **required** for password changes -- AD rejects `unicodePwd` modifications over unencrypted LDAP
 - Only skip TLS verification (`TLS_SKIP_VERIFY=true`) in development environments
 - The service account should have minimal permissions -- only Write access on the specific user attributes needed
 - Attribute values are not logged; only attribute names appear in the output to avoid leaking sensitive data
@@ -272,6 +322,12 @@ npm run dev
 - Verify attribute names match the AD schema (LDAP names, not display names)
 - Check that attribute values conform to the schema's syntax rules (e.g., email format for `mail`)
 - For multi-valued attributes, pass an array of values
+
+### Password Errors
+
+- Ensure the connection uses LDAPS (port 636) -- AD rejects password changes over unencrypted LDAP
+- Verify the password meets the domain's complexity requirements
+- Check that the service account has the "Reset Password" permission on the target user
 
 ## Support
 

@@ -7,14 +7,14 @@ inputs:
     description: Distinguished Name of the user to update (e.g., CN=John Doe,OU=Users,DC=example,DC=com)
     required: true
 
-  attributes:
-    type: object
-    description: Object containing attribute names and values to update
-    required: false
-
   samAccountName:
     type: text
     description: SAM account name (maps to sAMAccountName)
+    required: false
+
+  userPrincipalName:
+    type: text
+    description: User principal name / UPN (maps to userPrincipalName)
     required: false
 
   firstName:
@@ -55,6 +55,26 @@ inputs:
   address:
     type: text
     description: Optional LDAP/LDAPS URL override (e.g., ldaps://dc.example.com:636)
+    required: false
+
+  enabled:
+    type: boolean
+    description: Enable or disable the user account (sets userAccountControl to 512 or 514)
+    required: false
+
+  password:
+    type: text
+    description: New password for the user (encoded as unicodePwd UTF-16LE)
+    required: false
+
+  changePasswordAtNextLogin:
+    type: boolean
+    description: Force the user to change password at next login (sets pwdLastSet to 0)
+    required: false
+
+  additionalAttributes:
+    type: object
+    description: Object containing additional LDAP attribute names and values to update
     required: false
 
 outputs:
