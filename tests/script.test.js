@@ -45,7 +45,7 @@ describe('AD Update User Script', () => {
     test('should successfully update a single attribute', async () => {
       const params = {
         userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
-        attributes: { displayName: 'John Updated' }
+        additionalAttributes: { displayName: 'John Updated' }
       };
 
       const result = await script.invoke(params, mockContext);
@@ -68,7 +68,7 @@ describe('AD Update User Script', () => {
     test('should successfully update multiple attributes', async () => {
       const params = {
         userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
-        attributes: {
+        additionalAttributes: {
           displayName: 'John Updated',
           mail: 'john.updated@example.com',
           department: 'Engineering'
@@ -89,10 +89,10 @@ describe('AD Update User Script', () => {
       );
     });
 
-    test('should throw on empty attributes object', async () => {
+    test('should throw on empty additionalAttributes object', async () => {
       const params = {
         userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
-        attributes: {}
+        additionalAttributes: {}
       };
 
       await expect(script.invoke(params, mockContext)).rejects.toThrow(
@@ -119,7 +119,7 @@ describe('AD Update User Script', () => {
 
       const params = {
         userDN: 'CN=Nonexistent,OU=Users,DC=example,DC=com',
-        attributes: { displayName: 'Test' }
+        additionalAttributes: { displayName: 'Test' }
       };
 
       await expect(script.invoke(params, mockContext)).rejects.toThrow('No such object');
@@ -132,7 +132,7 @@ describe('AD Update User Script', () => {
 
       const params = {
         userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
-        attributes: { mail: 'invalid' }
+        additionalAttributes: { mail: 'invalid' }
       };
 
       await expect(script.invoke(params, mockContext)).rejects.toThrow('Constraint violation');
@@ -145,7 +145,7 @@ describe('AD Update User Script', () => {
 
       const params = {
         userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
-        attributes: { nonExistentAttr: 'value' }
+        additionalAttributes: { nonExistentAttr: 'value' }
       };
 
       await expect(script.invoke(params, mockContext)).rejects.toThrow('Undefined attribute type');
@@ -156,7 +156,7 @@ describe('AD Update User Script', () => {
 
       const params = {
         userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
-        attributes: { displayName: 'Test' }
+        additionalAttributes: { displayName: 'Test' }
       };
 
       await expect(script.invoke(params, mockContext)).rejects.toThrow('Bind failed: invalid credentials');
@@ -171,7 +171,7 @@ describe('AD Update User Script', () => {
 
       const params = {
         userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
-        attributes: { displayName: 'Test' }
+        additionalAttributes: { displayName: 'Test' }
       };
 
       await expect(script.invoke(params, context)).rejects.toThrow('BASIC_USERNAME secret is required');
@@ -185,7 +185,7 @@ describe('AD Update User Script', () => {
 
       const params = {
         userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
-        attributes: { displayName: 'Test' }
+        additionalAttributes: { displayName: 'Test' }
       };
 
       await expect(script.invoke(params, context)).rejects.toThrow('BASIC_PASSWORD secret is required');
@@ -199,7 +199,7 @@ describe('AD Update User Script', () => {
 
       const params = {
         userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
-        attributes: { displayName: 'Test' }
+        additionalAttributes: { displayName: 'Test' }
       };
 
       await script.invoke(params, context);
@@ -213,7 +213,7 @@ describe('AD Update User Script', () => {
     test('should leave tlsOptions empty when TLS_SKIP_VERIFY is not set', async () => {
       const params = {
         userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
-        attributes: { displayName: 'Test' }
+        additionalAttributes: { displayName: 'Test' }
       };
 
       await script.invoke(params, mockContext);
@@ -229,7 +229,7 @@ describe('AD Update User Script', () => {
 
       const params = {
         userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
-        attributes: { displayName: 'Test' },
+        additionalAttributes: { displayName: 'Test' },
         address: 'ldaps://override.example.com:636'
       };
 
@@ -241,7 +241,7 @@ describe('AD Update User Script', () => {
     test('should call getBaseURL with params and context', async () => {
       const params = {
         userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
-        attributes: { displayName: 'Test' }
+        additionalAttributes: { displayName: 'Test' }
       };
 
       await script.invoke(params, mockContext);
@@ -252,7 +252,7 @@ describe('AD Update User Script', () => {
     test('should pass array attribute values through without double-wrapping', async () => {
       const params = {
         userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
-        attributes: {
+        additionalAttributes: {
           otherTelephone: ['+1-555-0100', '+1-555-0101']
         }
       };
@@ -272,7 +272,7 @@ describe('AD Update User Script', () => {
   });
 
   describe('named input parameters', () => {
-    test('should map named params to LDAP attribute names without attributes object', async () => {
+    test('should map named params to LDAP attribute names without additionalAttributes object', async () => {
       const params = {
         userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
         firstName: 'John',
@@ -294,11 +294,11 @@ describe('AD Update User Script', () => {
       );
     });
 
-    test('should merge named params with attributes object', async () => {
+    test('should merge named params with additionalAttributes object', async () => {
       const params = {
         userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
         firstName: 'John',
-        attributes: {
+        additionalAttributes: {
           telephoneNumber: '+1-555-0100'
         }
       };
@@ -309,11 +309,11 @@ describe('AD Update User Script', () => {
       expect(result.attributes).toEqual(expect.arrayContaining(['telephoneNumber', 'givenName']));
     });
 
-    test('should let named params override conflicting attributes keys', async () => {
+    test('should let named params override conflicting additionalAttributes keys', async () => {
       const params = {
         userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
         email: 'named@example.com',
-        attributes: {
+        additionalAttributes: {
           mail: 'attributes@example.com'
         }
       };
@@ -328,10 +328,11 @@ describe('AD Update User Script', () => {
       );
     });
 
-    test('should map all 8 named params to correct LDAP names', async () => {
+    test('should map all 9 named params to correct LDAP names', async () => {
       const params = {
         userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
         samAccountName: 'jdoe',
+        userPrincipalName: 'jdoe@example.com',
         firstName: 'John',
         lastName: 'Doe',
         displayName: 'John Doe',
@@ -344,12 +345,30 @@ describe('AD Update User Script', () => {
       const result = await script.invoke(params, mockContext);
 
       expect(result.attributes).toEqual(expect.arrayContaining([
-        'sAMAccountName', 'givenName', 'sn', 'displayName',
+        'sAMAccountName', 'userPrincipalName', 'givenName', 'sn', 'displayName',
         'mail', 'company', 'department', 'title'
       ]));
     });
 
-    test('should throw when no named params and no attributes provided', async () => {
+    test('should map userPrincipalName to LDAP userPrincipalName', async () => {
+      const params = {
+        userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
+        userPrincipalName: 'jdoe@example.com'
+      };
+
+      const result = await script.invoke(params, mockContext);
+
+      expect(result.status).toBe('success');
+      expect(result.attributes).toContain('userPrincipalName');
+      expect(mockModify).toHaveBeenCalledWith(
+        'CN=John Doe,OU=Users,DC=example,DC=com',
+        [
+          { operation: 'replace', modification: { userPrincipalName: ['jdoe@example.com'] } }
+        ]
+      );
+    });
+
+    test('should throw when no named params and no additionalAttributes provided', async () => {
       const params = {
         userDN: 'CN=John Doe,OU=Users,DC=example,DC=com'
       };
@@ -360,16 +379,135 @@ describe('AD Update User Script', () => {
       expect(mockBind).not.toHaveBeenCalled();
     });
 
-    test('should throw when empty attributes and no named params provided', async () => {
+    test('should throw when empty additionalAttributes and no named params provided', async () => {
       const params = {
         userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
-        attributes: {}
+        additionalAttributes: {}
       };
 
       await expect(script.invoke(params, mockContext)).rejects.toThrow(
         'At least one attribute must be provided'
       );
       expect(mockBind).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('enabled parameter', () => {
+    test('should set userAccountControl to 512 when enabled is true', async () => {
+      const params = {
+        userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
+        enabled: true
+      };
+
+      const result = await script.invoke(params, mockContext);
+
+      expect(result.status).toBe('success');
+      expect(result.attributes).toContain('userAccountControl');
+      expect(mockModify).toHaveBeenCalledWith(
+        'CN=John Doe,OU=Users,DC=example,DC=com',
+        [
+          { operation: 'replace', modification: { userAccountControl: ['512'] } }
+        ]
+      );
+    });
+
+    test('should set userAccountControl to 514 when enabled is false', async () => {
+      const params = {
+        userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
+        enabled: false
+      };
+
+      const result = await script.invoke(params, mockContext);
+
+      expect(result.status).toBe('success');
+      expect(result.attributes).toContain('userAccountControl');
+      expect(mockModify).toHaveBeenCalledWith(
+        'CN=John Doe,OU=Users,DC=example,DC=com',
+        [
+          { operation: 'replace', modification: { userAccountControl: ['514'] } }
+        ]
+      );
+    });
+
+    test('should not set userAccountControl when enabled is omitted', async () => {
+      const params = {
+        userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
+        firstName: 'John'
+      };
+
+      const result = await script.invoke(params, mockContext);
+
+      expect(result.attributes).not.toContain('userAccountControl');
+    });
+  });
+
+  describe('password parameter', () => {
+    test('should set unicodePwd as encoded Buffer when password is provided', async () => {
+      const params = {
+        userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
+        password: 'P@ssw0rd123'
+      };
+
+      const result = await script.invoke(params, mockContext);
+
+      expect(result.status).toBe('success');
+      expect(result.attributes).toContain('unicodePwd');
+
+      const modifyCall = mockModify.mock.calls[0];
+      const unicodePwdChange = modifyCall[1].find(
+        c => c.modification.unicodePwd !== undefined
+      );
+      expect(unicodePwdChange).toBeDefined();
+      expect(unicodePwdChange.operation).toBe('replace');
+
+      const pwdValue = unicodePwdChange.modification.unicodePwd[0];
+      expect(Buffer.isBuffer(pwdValue)).toBe(true);
+
+      const expectedBuffer = Buffer.from('"P@ssw0rd123"', 'utf16le');
+      expect(pwdValue).toEqual(expectedBuffer);
+    });
+
+    test('should not set unicodePwd when password is omitted', async () => {
+      const params = {
+        userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
+        firstName: 'John'
+      };
+
+      const result = await script.invoke(params, mockContext);
+
+      expect(result.attributes).not.toContain('unicodePwd');
+    });
+  });
+
+  describe('changePasswordAtNextLogin parameter', () => {
+    test('should set pwdLastSet to 0 when changePasswordAtNextLogin is true', async () => {
+      const params = {
+        userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
+        changePasswordAtNextLogin: true
+      };
+
+      const result = await script.invoke(params, mockContext);
+
+      expect(result.status).toBe('success');
+      expect(result.attributes).toContain('pwdLastSet');
+      expect(mockModify).toHaveBeenCalledWith(
+        'CN=John Doe,OU=Users,DC=example,DC=com',
+        [
+          { operation: 'replace', modification: { pwdLastSet: ['0'] } }
+        ]
+      );
+    });
+
+    test('should not set pwdLastSet when changePasswordAtNextLogin is false', async () => {
+      const params = {
+        userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
+        changePasswordAtNextLogin: false,
+        firstName: 'John'
+      };
+
+      const result = await script.invoke(params, mockContext);
+
+      expect(result.attributes).not.toContain('pwdLastSet');
     });
   });
 

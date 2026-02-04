@@ -30,8 +30,12 @@ function getBaseURL(params, context) {
   return address.endsWith('/') ? address.slice(0, -1) : address;
 }
 
+const UAC_ENABLED = '512';
+const UAC_DISABLED = '514';
+
 const PARAM_TO_LDAP = {
   samAccountName: 'sAMAccountName',
+  userPrincipalName: 'userPrincipalName',
   firstName: 'givenName',
   lastName: 'sn',
   displayName: 'displayName',
@@ -41,8 +45,13 @@ const PARAM_TO_LDAP = {
   title: 'title'
 };
 
+function encodePassword(password) {
+  const quotedPassword = `"${password}"`;
+  return Buffer.from(quotedPassword, 'utf16le');
+}
+
 function buildAttributes(params) {
-  const merged = { ...(params.attributes || {}) };
+  const merged = { ...(params.additionalAttributes || {}) };
   for (const [param, ldapName] of Object.entries(PARAM_TO_LDAP)) {
     if (params[param] !== undefined) {
       merged[ldapName] = params[param];
@@ -66,6 +75,16 @@ var script = {
   invoke: async (params, context) => {
     const { userDN } = params;
     const attributes = buildAttributes(params);
+
+    if (params.enabled !== undefined) {
+      attributes.userAccountControl = params.enabled ? UAC_ENABLED : UAC_DISABLED;
+    }
+    if (params.password) {
+      attributes.unicodePwd = encodePassword(params.password);
+    }
+    if (params.changePasswordAtNextLogin) {
+      attributes.pwdLastSet = '0';
+    }
 
     if (!attributes || typeof attributes !== 'object' || Object.keys(attributes).length === 0) {
       throw new Error('At least one attribute must be provided');
