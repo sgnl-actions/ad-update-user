@@ -23,7 +23,7 @@ const { Client } = await import('ldapts');
 
 describe('AD Update User Script', () => {
   const mockContext = {
-    env: {
+    environment: {
       ADDRESS: 'ldaps://dc.example.com:636'
     },
     secrets: {
@@ -194,7 +194,7 @@ describe('AD Update User Script', () => {
     test('should set rejectUnauthorized false when TLS_SKIP_VERIFY is true', async () => {
       const context = {
         ...mockContext,
-        env: { ...mockContext.env, TLS_SKIP_VERIFY: 'true' }
+        environment: { ...mockContext.environment, TLS_SKIP_VERIFY: 'true' }
       };
 
       const params = {
