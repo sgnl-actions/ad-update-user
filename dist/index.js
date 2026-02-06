@@ -73,7 +73,7 @@ async function updateUserAttributes(userDN, attributes, client) {
 
 var script = {
   invoke: async (params, context) => {
-    const { userDN } = params;
+    const { userDN, dry_run = false } = params;
     const attributes = buildAttributes(params);
 
     if (params.enabled !== undefined) {
@@ -90,19 +90,29 @@ var script = {
       throw new Error('At least one attribute must be provided');
     }
 
+    if (dry_run) {
+      console.log('DRY RUN: No changes will be made to Active Directory');
+      return {
+        status: 'dry_run_completed',
+        userDN,
+        modified: false,
+        attributes: Object.keys(attributes)
+      };
+    }
+
     const address = getBaseURL(params, context);
-    const username = context.secrets.BASIC_USERNAME;
-    const password = context.secrets.BASIC_PASSWORD;
+    const username = context.secrets.LDAP_BIND_DN;
+    const password = context.secrets.LDAP_BIND_PASSWORD;
 
     if (!username) {
-      throw new Error('BASIC_USERNAME secret is required');
+      throw new Error('LDAP_BIND_DN secret is required');
     }
     if (!password) {
-      throw new Error('BASIC_PASSWORD secret is required');
+      throw new Error('LDAP_BIND_PASSWORD secret is required');
     }
 
     const tlsOptions = {};
-    if (context.env.TLS_SKIP_VERIFY === 'true') {
+    if (context.environment?.TLS_SKIP_VERIFY === 'true') {
       tlsOptions.rejectUnauthorized = false;
     }
 
@@ -129,7 +139,49 @@ var script = {
 
   error: async (params, _context) => {
     const { error, userDN } = params;
-    console.error(`Error updating user ${userDN}: ${error.message}`);
+    console.error(`Failed to update AD user ${userDN}: ${error.message}`);
+
+    const errorMessage = error.message.toLowerCase();
+
+    // Authentication errors (fatal - don't retry)
+    if (errorMessage.includes('invalid credentials') ||
+        errorMessage.includes('authentication') ||
+        errorMessage.includes('bind failed')) {
+      console.error('Authentication failed - check LDAP_BIND_DN and LDAP_BIND_PASSWORD');
+      throw new Error(`LDAP authentication failed: ${error.message}`);
+    }
+
+    // Connection errors (retryable)
+    if (errorMessage.includes('connection') ||
+        errorMessage.includes('timeout') ||
+        errorMessage.includes('econnrefused')) {
+      console.error('Connection error - may be transient, framework will retry');
+      throw error;
+    }
+
+    // User not found (fatal - don't retry)
+    if (errorMessage.includes('no such object') ||
+        errorMessage.includes('not found')) {
+      console.error('User not found - check userDN');
+      throw new Error(`User not found: ${error.message}`);
+    }
+
+    // Constraint violations (fatal - don't retry)
+    if (errorMessage.includes('constraint violation') ||
+        errorMessage.includes('invalid syntax')) {
+      console.error('Data validation error - check input parameters');
+      throw new Error(`Invalid attribute data: ${error.message}`);
+    }
+
+    // Insufficient permissions (fatal - don't retry)
+    if (errorMessage.includes('insufficient access') ||
+        errorMessage.includes('permission denied')) {
+      console.error('Insufficient permissions - check service account privileges');
+      throw new Error(`Insufficient LDAP permissions: ${error.message}`);
+    }
+
+    // Unknown error - re-throw for framework retry
+    console.error('Unknown error occurred, allowing framework to retry');
     throw error;
   },
 

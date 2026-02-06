@@ -7,12 +7,13 @@
 import script from '../src/script.mjs';
 
 const mockContext = {
-  env: {
+  environment: {
     ADDRESS: 'ldaps://dc.example.com:636',
+    // TLS_SKIP_VERIFY: 'true',  // Uncomment to skip TLS certificate verification
   },
   secrets: {
-    BASIC_USERNAME: 'CN=admin,DC=example,DC=com',
-    BASIC_PASSWORD: 'admin-password',
+    LDAP_BIND_DN: 'CN=admin,DC=example,DC=com',
+    LDAP_BIND_PASSWORD: 'admin-password',
   },
   outputs: {},
   partial_results: {},
@@ -26,9 +27,10 @@ const mockParams = {
   email: 'john.doe@example.com',
   department: 'Engineering',
   title: 'Software Engineer',
-  attributes: {
+  additionalAttributes: {
     telephoneNumber: '+1-555-0100',
   },
+  dry_run: true,  // Set to false to actually update the user
 };
 
 async function runDev() {

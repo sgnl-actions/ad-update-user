@@ -77,6 +77,11 @@ inputs:
     description: Object containing additional LDAP attribute names and values to update
     required: false
 
+  dry_run:
+    type: boolean
+    description: When true, validates parameters and logs intended actions without making changes to Active Directory
+    required: false
+
 outputs:
   status:
     type: text

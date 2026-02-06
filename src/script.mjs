@@ -72,14 +72,14 @@ export default {
     }
 
     const address = getBaseURL(params, context);
-    const username = context.secrets.BASIC_USERNAME;
-    const password = context.secrets.BASIC_PASSWORD;
+    const username = context.secrets.LDAP_BIND_DN;
+    const password = context.secrets.LDAP_BIND_PASSWORD;
 
     if (!username) {
-      throw new Error('BASIC_USERNAME secret is required');
+      throw new Error('LDAP_BIND_DN secret is required');
     }
     if (!password) {
-      throw new Error('BASIC_PASSWORD secret is required');
+      throw new Error('LDAP_BIND_PASSWORD secret is required');
     }
 
     const tlsOptions = {};
@@ -118,7 +118,7 @@ export default {
     if (errorMessage.includes('invalid credentials') ||
         errorMessage.includes('authentication') ||
         errorMessage.includes('bind failed')) {
-      console.error('Authentication failed - check BASIC_USERNAME and BASIC_PASSWORD');
+      console.error('Authentication failed - check LDAP_BIND_DN and LDAP_BIND_PASSWORD');
       throw new Error(`LDAP authentication failed: ${error.message}`);
     }
 
