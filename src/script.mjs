@@ -1,9 +1,21 @@
-import { Client } from 'ldapts';
+/**
+ * Active Directory Update User Action
+ *
+ * Updates attributes on an existing user in on-premise Active Directory using LDAP/LDAPS.
+ * Supports updating any user attributes including password and enabled/disabled state.
+ */
+
+import { Client, Change, Attribute } from 'ldapts';
 import { getBaseURL } from '@sgnl-actions/utils';
 
-const UAC_ENABLED = '512';
-const UAC_DISABLED = '514';
+/** userAccountControl values for enabled/disabled accounts */
+const UAC_ENABLED = '512';   // NORMAL_ACCOUNT
+const UAC_DISABLED = '514';  // NORMAL_ACCOUNT | ACCOUNTDISABLE
 
+/**
+ * Mapping from friendly parameter names to LDAP attribute names.
+ * These are the commonly used AD user attributes.
+ */
 const PARAM_TO_LDAP = {
   samAccountName: 'sAMAccountName',
   userPrincipalName: 'userPrincipalName',
@@ -16,12 +28,27 @@ const PARAM_TO_LDAP = {
   title: 'title'
 };
 
+/**
+ * Encode a password for Active Directory using UTF-16LE format.
+ * AD requires passwords to be wrapped in quotes and encoded as UTF-16LE.
+ *
+ * @param {string} password - The plaintext password
+ * @returns {Buffer} The encoded password buffer
+ */
 function encodePassword(password) {
   const quotedPassword = `"${password}"`;
   return Buffer.from(quotedPassword, 'utf16le');
 }
 
+/**
+ * Build LDAP attributes object from params, mapping friendly names to LDAP names.
+ * Named params override conflicting additionalAttributes keys.
+ *
+ * @param {Object} params - The input parameters
+ * @returns {Object} The LDAP attributes object
+ */
 function buildAttributes(params) {
+  // Start with additionalAttributes, then overlay named params
   const merged = { ...(params.additionalAttributes || {}) };
   for (const [param, ldapName] of Object.entries(PARAM_TO_LDAP)) {
     if (params[param] !== undefined) {
@@ -31,36 +58,100 @@ function buildAttributes(params) {
   return merged;
 }
 
+/**
+ * Update user attributes in Active Directory using replace operations.
+ *
+ * @param {string} userDN - Distinguished Name of the user
+ * @param {Object} attributes - Attributes to update
+ * @param {Client} client - Bound ldapts Client instance
+ */
 async function updateUserAttributes(userDN, attributes, client) {
-  const changes = Object.entries(attributes).map(([key, value]) => ({
-    operation: 'replace',
-    modification: {
-      [key]: Array.isArray(value) ? value : [value]
-    }
-  }));
+  const changes = Object.entries(attributes).map(([key, value]) =>
+    new Change({
+      operation: 'replace',
+      modification: new Attribute({
+        type: key,
+        values: Array.isArray(value) ? value : [value]
+      })
+    })
+  );
 
   await client.modify(userDN, changes);
 }
 
+/**
+ * Safely disconnect from LDAP server.
+ * Errors during unbind are logged but not thrown to avoid masking original errors.
+ *
+ * @param {Client} client - The ldapts client
+ */
+async function safeUnbind(client) {
+  try {
+    await client.unbind();
+  } catch (unbindError) {
+    console.warn(`Warning: Error during LDAP unbind: ${unbindError.message}`);
+  }
+}
+
 export default {
+  /**
+   * Main execution handler - updates a user in Active Directory.
+   *
+   * @param {Object} params - Job input parameters
+   * @param {string} params.userDN - Distinguished Name of the user to update
+   * @param {string} [params.samAccountName] - SAM account name
+   * @param {string} [params.userPrincipalName] - User principal name
+   * @param {string} [params.firstName] - First name (givenName)
+   * @param {string} [params.lastName] - Last name (sn)
+   * @param {string} [params.displayName] - Display name
+   * @param {string} [params.email] - Email address (mail)
+   * @param {string} [params.company] - Company name
+   * @param {string} [params.department] - Department name
+   * @param {string} [params.title] - Job title
+   * @param {string} [params.password] - New password (will be encoded)
+   * @param {boolean} [params.enabled] - Enable or disable the account
+   * @param {boolean} [params.changePasswordAtNextLogin] - Force password change at next login
+   * @param {Object} [params.additionalAttributes] - Additional LDAP attributes to update
+   * @param {boolean} [params.dry_run] - If true, validate without making changes
+   * @param {Object} context - Execution context with environment and secrets
+   * @returns {Object} Job results including status, userDN, and modified flag
+   */
   invoke: async (params, context) => {
+    console.log('Starting Active Directory update user operation');
+
     const { userDN, dry_run = false } = params;
+
+    // Validate required parameters
+    if (!userDN) {
+      throw new Error('userDN is required');
+    }
+
+    // Build attributes from params
     const attributes = buildAttributes(params);
 
+    // Add special attributes
     if (params.enabled !== undefined) {
       attributes.userAccountControl = params.enabled ? UAC_ENABLED : UAC_DISABLED;
+      console.log(`Account will be ${params.enabled ? 'enabled' : 'disabled'}`);
     }
     if (params.password) {
       attributes.unicodePwd = encodePassword(params.password);
+      console.log('Password will be updated');
     }
     if (params.changePasswordAtNextLogin) {
       attributes.pwdLastSet = '0';
+      console.log('User will be required to change password at next login');
     }
 
+    // Validate at least one attribute is being updated
     if (!attributes || typeof attributes !== 'object' || Object.keys(attributes).length === 0) {
       throw new Error('At least one attribute must be provided');
     }
 
+    console.log(`Planning to update user: ${userDN}`);
+    console.log(`Attributes to update: ${Object.keys(attributes).join(', ')}`);
+
+    // Handle dry run - validate and return without making changes
     if (dry_run) {
       console.log('DRY RUN: No changes will be made to Active Directory');
       return {
@@ -71,31 +162,44 @@ export default {
       };
     }
 
+    // Get LDAP connection details
     const address = getBaseURL(params, context);
-    const username = context.secrets.LDAP_BIND_DN;
-    const password = context.secrets.LDAP_BIND_PASSWORD;
+    const bindDN = context.secrets.LDAP_BIND_DN;
+    const bindPassword = context.secrets.LDAP_BIND_PASSWORD;
 
-    if (!username) {
+    // Validate required secrets
+    if (!bindDN) {
       throw new Error('LDAP_BIND_DN secret is required');
     }
-    if (!password) {
+    if (!bindPassword) {
       throw new Error('LDAP_BIND_PASSWORD secret is required');
     }
 
-    const tlsOptions = {};
-    if (context.environment?.TLS_SKIP_VERIFY === 'true') {
-      tlsOptions.rejectUnauthorized = false;
+    // Configure LDAP client with timeouts
+    const clientOptions = {
+      url: address,
+      timeout: 10000,
+      connectTimeout: 10000
+    };
+
+    // Configure TLS options for secure connections
+    if (address.startsWith('ldaps://') || context.environment?.TLS_SKIP_VERIFY === 'true') {
+      clientOptions.tlsOptions = {
+        rejectUnauthorized: context.environment?.TLS_SKIP_VERIFY !== 'true'
+      };
     }
 
-    const client = new Client({
-      url: address,
-      tlsOptions
-    });
+    const client = new Client(clientOptions);
 
     try {
-      await client.bind(username, password);
+      console.log(`Connecting to LDAP server at ${address}`);
+      await client.bind(bindDN, bindPassword);
+      console.log('Successfully authenticated to LDAP server');
+
+      console.log(`Updating user: ${userDN}`);
       await updateUserAttributes(userDN, attributes, client);
 
+      console.log(`Successfully updated user: ${userDN}`);
       return {
         status: 'success',
         userDN,
@@ -103,14 +207,26 @@ export default {
         attributes: Object.keys(attributes),
         address
       };
+    } catch (error) {
+      console.error(`Failed to update user: ${error.message}`);
+      throw error;
     } finally {
-      await client.unbind();
+      await safeUnbind(client);
     }
   },
 
+  /**
+   * Error recovery handler - classifies errors and determines retry behavior.
+   *
+   * @param {Object} params - Original params plus error information
+   * @param {Error} params.error - The error that occurred
+   * @param {string} params.userDN - The user DN being updated
+   * @param {Object} _context - Execution context (unused)
+   * @throws {Error} Re-throws with appropriate classification
+   */
   error: async (params, _context) => {
     const { error, userDN } = params;
-    console.error(`Failed to update AD user ${userDN}: ${error.message}`);
+    console.error(`Error handler invoked for user "${userDN}": ${error.message}`);
 
     const errorMessage = error.message.toLowerCase();
 
@@ -122,7 +238,7 @@ export default {
       throw new Error(`LDAP authentication failed: ${error.message}`);
     }
 
-    // Connection errors (retryable)
+    // Connection errors (retryable - framework will retry)
     if (errorMessage.includes('connection') ||
         errorMessage.includes('timeout') ||
         errorMessage.includes('econnrefused')) {
@@ -156,8 +272,19 @@ export default {
     throw error;
   },
 
+  /**
+   * Graceful shutdown handler - called when the job is halted.
+   *
+   * @param {Object} params - Original params plus halt reason
+   * @param {string} params.reason - The reason for the halt
+   * @param {string} [params.userDN] - The user DN being updated
+   * @param {Object} _context - Execution context (unused)
+   * @returns {Object} Cleanup results with halted status
+   */
   halt: async (params, _context) => {
     const { reason, userDN } = params;
+    console.log(`Active Directory update user operation halted: ${reason}`);
+
     return {
       status: 'halted',
       userDN: userDN || 'unknown',

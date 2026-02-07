@@ -9,6 +9,14 @@ jest.unstable_mockModule('ldapts', () => ({
     bind: mockBind,
     unbind: mockUnbind,
     modify: mockModify
+  })),
+  Change: jest.fn().mockImplementation((opts) => ({
+    operation: opts.operation,
+    modification: opts.modification
+  })),
+  Attribute: jest.fn().mockImplementation((opts) => ({
+    type: opts.type,
+    values: opts.values
   }))
 }));
 
@@ -59,7 +67,7 @@ describe('AD Update User Script', () => {
         [
           {
             operation: 'replace',
-            modification: { displayName: ['John Updated'] }
+            modification: { type: 'displayName', values: ['John Updated'] }
           }
         ]
       );
@@ -82,9 +90,9 @@ describe('AD Update User Script', () => {
       expect(mockModify).toHaveBeenCalledWith(
         'CN=John Doe,OU=Users,DC=example,DC=com',
         [
-          { operation: 'replace', modification: { displayName: ['John Updated'] } },
-          { operation: 'replace', modification: { mail: ['john.updated@example.com'] } },
-          { operation: 'replace', modification: { department: ['Engineering'] } }
+          { operation: 'replace', modification: { type: 'displayName', values: ['John Updated'] } },
+          { operation: 'replace', modification: { type: 'mail', values: ['john.updated@example.com'] } },
+          { operation: 'replace', modification: { type: 'department', values: ['Engineering'] } }
         ]
       );
     });
@@ -206,11 +214,13 @@ describe('AD Update User Script', () => {
 
       expect(Client).toHaveBeenCalledWith({
         url: 'ldaps://dc.example.com:636',
+        timeout: 10000,
+        connectTimeout: 10000,
         tlsOptions: { rejectUnauthorized: false }
       });
     });
 
-    test('should leave tlsOptions empty when TLS_SKIP_VERIFY is not set', async () => {
+    test('should set rejectUnauthorized to true for ldaps:// URLs when TLS_SKIP_VERIFY is not set', async () => {
       const params = {
         userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
         additionalAttributes: { displayName: 'Test' }
@@ -220,7 +230,26 @@ describe('AD Update User Script', () => {
 
       expect(Client).toHaveBeenCalledWith({
         url: 'ldaps://dc.example.com:636',
-        tlsOptions: {}
+        timeout: 10000,
+        connectTimeout: 10000,
+        tlsOptions: { rejectUnauthorized: true }
+      });
+    });
+
+    test('should not include tlsOptions for ldap:// URLs when TLS_SKIP_VERIFY is not set', async () => {
+      mockGetBaseURL.mockReturnValue('ldap://dc.example.com:389');
+
+      const params = {
+        userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
+        additionalAttributes: { displayName: 'Test' }
+      };
+
+      await script.invoke(params, mockContext);
+
+      expect(Client).toHaveBeenCalledWith({
+        url: 'ldap://dc.example.com:389',
+        timeout: 10000,
+        connectTimeout: 10000
       });
     });
 
@@ -264,7 +293,7 @@ describe('AD Update User Script', () => {
         [
           {
             operation: 'replace',
-            modification: { otherTelephone: ['+1-555-0100', '+1-555-0101'] }
+            modification: { type: 'otherTelephone', values: ['+1-555-0100', '+1-555-0101'] }
           }
         ]
       );
@@ -287,9 +316,9 @@ describe('AD Update User Script', () => {
       expect(mockModify).toHaveBeenCalledWith(
         'CN=John Doe,OU=Users,DC=example,DC=com',
         expect.arrayContaining([
-          { operation: 'replace', modification: { givenName: ['John'] } },
-          { operation: 'replace', modification: { sn: ['Doe'] } },
-          { operation: 'replace', modification: { mail: ['john@example.com'] } }
+          { operation: 'replace', modification: { type: 'givenName', values: ['John'] } },
+          { operation: 'replace', modification: { type: 'sn', values: ['Doe'] } },
+          { operation: 'replace', modification: { type: 'mail', values: ['john@example.com'] } }
         ])
       );
     });
@@ -323,7 +352,7 @@ describe('AD Update User Script', () => {
       expect(mockModify).toHaveBeenCalledWith(
         'CN=John Doe,OU=Users,DC=example,DC=com',
         [
-          { operation: 'replace', modification: { mail: ['named@example.com'] } }
+          { operation: 'replace', modification: { type: 'mail', values: ['named@example.com'] } }
         ]
       );
     });
@@ -363,7 +392,7 @@ describe('AD Update User Script', () => {
       expect(mockModify).toHaveBeenCalledWith(
         'CN=John Doe,OU=Users,DC=example,DC=com',
         [
-          { operation: 'replace', modification: { userPrincipalName: ['jdoe@example.com'] } }
+          { operation: 'replace', modification: { type: 'userPrincipalName', values: ['jdoe@example.com'] } }
         ]
       );
     });
@@ -406,7 +435,7 @@ describe('AD Update User Script', () => {
       expect(mockModify).toHaveBeenCalledWith(
         'CN=John Doe,OU=Users,DC=example,DC=com',
         [
-          { operation: 'replace', modification: { userAccountControl: ['512'] } }
+          { operation: 'replace', modification: { type: 'userAccountControl', values: ['512'] } }
         ]
       );
     });
@@ -424,7 +453,7 @@ describe('AD Update User Script', () => {
       expect(mockModify).toHaveBeenCalledWith(
         'CN=John Doe,OU=Users,DC=example,DC=com',
         [
-          { operation: 'replace', modification: { userAccountControl: ['514'] } }
+          { operation: 'replace', modification: { type: 'userAccountControl', values: ['514'] } }
         ]
       );
     });
@@ -455,12 +484,12 @@ describe('AD Update User Script', () => {
 
       const modifyCall = mockModify.mock.calls[0];
       const unicodePwdChange = modifyCall[1].find(
-        c => c.modification.unicodePwd !== undefined
+        c => c.modification.type === 'unicodePwd'
       );
       expect(unicodePwdChange).toBeDefined();
       expect(unicodePwdChange.operation).toBe('replace');
 
-      const pwdValue = unicodePwdChange.modification.unicodePwd[0];
+      const pwdValue = unicodePwdChange.modification.values[0];
       expect(Buffer.isBuffer(pwdValue)).toBe(true);
 
       const expectedBuffer = Buffer.from('"P@ssw0rd123"', 'utf16le');
@@ -493,7 +522,7 @@ describe('AD Update User Script', () => {
       expect(mockModify).toHaveBeenCalledWith(
         'CN=John Doe,OU=Users,DC=example,DC=com',
         [
-          { operation: 'replace', modification: { pwdLastSet: ['0'] } }
+          { operation: 'replace', modification: { type: 'pwdLastSet', values: ['0'] } }
         ]
       );
     });
@@ -508,6 +537,62 @@ describe('AD Update User Script', () => {
       const result = await script.invoke(params, mockContext);
 
       expect(result.attributes).not.toContain('pwdLastSet');
+    });
+  });
+
+  describe('missing required parameters', () => {
+    test('should throw when userDN is missing', async () => {
+      const params = { firstName: 'John' };
+
+      await expect(script.invoke(params, mockContext)).rejects.toThrow('userDN is required');
+      expect(mockBind).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('unbind error handling', () => {
+    test('should handle unbind errors gracefully', async () => {
+      mockUnbind.mockRejectedValueOnce(new Error('Unbind failed'));
+
+      const params = {
+        userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
+        firstName: 'John'
+      };
+
+      const result = await script.invoke(params, mockContext);
+
+      expect(result.status).toBe('success');
+      expect(result.modified).toBe(true);
+    });
+
+    test('should not mask original error when unbind also fails', async () => {
+      mockModify.mockRejectedValueOnce(new Error('Modify operation failed'));
+      mockUnbind.mockRejectedValueOnce(new Error('Unbind failed'));
+
+      const params = {
+        userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
+        firstName: 'John'
+      };
+
+      await expect(script.invoke(params, mockContext)).rejects.toThrow('Modify operation failed');
+    });
+  });
+
+  describe('dry run', () => {
+    test('should return dry_run_completed when dry_run is true', async () => {
+      const params = {
+        userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
+        firstName: 'John',
+        dry_run: true
+      };
+
+      const result = await script.invoke(params, mockContext);
+
+      expect(result.status).toBe('dry_run_completed');
+      expect(result.userDN).toBe('CN=John Doe,OU=Users,DC=example,DC=com');
+      expect(result.modified).toBe(false);
+      expect(result.attributes).toContain('givenName');
+      expect(mockBind).not.toHaveBeenCalled();
+      expect(mockModify).not.toHaveBeenCalled();
     });
   });
 
