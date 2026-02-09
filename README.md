@@ -21,8 +21,8 @@ Supports updating any combination of standard AD user attributes in a single cal
 
 | Secret | Description |
 |--------|-------------|
-| `BASIC_USERNAME` | Bind DN of the service account (e.g., `CN=svc-sgnl,OU=Service Accounts,DC=example,DC=com`) |
-| `BASIC_PASSWORD` | Password for the service account |
+| `LDAP_BIND_DN` | Bind DN of the service account (e.g., `CN=svc-sgnl,OU=Service Accounts,DC=example,DC=com`) |
+| `LDAP_BIND_PASSWORD` | Password for the service account |
 
 ### Environment Variables
 
