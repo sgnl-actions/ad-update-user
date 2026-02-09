@@ -52,16 +52,6 @@ inputs:
     description: Job title (maps to title)
     required: false
 
-  address:
-    type: text
-    description: Optional LDAP/LDAPS URL override (e.g., ldaps://dc.example.com:636)
-    required: false
-
-  enabled:
-    type: boolean
-    description: Enable or disable the user account (sets userAccountControl to 512 or 514)
-    required: false
-
   password:
     type: text
     description: New password for the user (encoded as unicodePwd UTF-16LE)
@@ -80,6 +70,11 @@ inputs:
   dry_run:
     type: boolean
     description: When true, validates parameters and logs intended actions without making changes to Active Directory
+    required: false
+
+  address:
+    type: text
+    description: Optional LDAP server URL override
     required: false
 
 outputs:

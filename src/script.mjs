@@ -8,10 +8,6 @@
 import { Client, Change, Attribute } from 'ldapts';
 import { getBaseURL } from '@sgnl-actions/utils';
 
-/** userAccountControl values for enabled/disabled accounts */
-const UAC_ENABLED = '512';   // NORMAL_ACCOUNT
-const UAC_DISABLED = '514';  // NORMAL_ACCOUNT | ACCOUNTDISABLE
-
 /**
  * Mapping from friendly parameter names to LDAP attribute names.
  * These are the commonly used AD user attributes.
@@ -109,7 +105,6 @@ export default {
    * @param {string} [params.department] - Department name
    * @param {string} [params.title] - Job title
    * @param {string} [params.password] - New password (will be encoded)
-   * @param {boolean} [params.enabled] - Enable or disable the account
    * @param {boolean} [params.changePasswordAtNextLogin] - Force password change at next login
    * @param {Object} [params.additionalAttributes] - Additional LDAP attributes to update
    * @param {boolean} [params.dry_run] - If true, validate without making changes
@@ -130,10 +125,6 @@ export default {
     const attributes = buildAttributes(params);
 
     // Add special attributes
-    if (params.enabled !== undefined) {
-      attributes.userAccountControl = params.enabled ? UAC_ENABLED : UAC_DISABLED;
-      console.log(`Account will be ${params.enabled ? 'enabled' : 'disabled'}`);
-    }
     if (params.password) {
       attributes.unicodePwd = encodePassword(params.password);
       console.log('Password will be updated');

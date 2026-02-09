@@ -33,23 +33,22 @@ Supports updating any combination of standard AD user attributes in a single cal
 
 ### Input Parameters
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `userDN` | text | Yes | Distinguished Name of the user to update |
-| `samAccountName` | text | No | SAM account name (maps to `sAMAccountName`) |
-| `userPrincipalName` | text | No | User principal name / UPN (maps to `userPrincipalName`) |
-| `firstName` | text | No | First name (maps to `givenName`) |
-| `lastName` | text | No | Last name (maps to `sn`) |
-| `displayName` | text | No | Display name (maps to `displayName`) |
-| `email` | text | No | Email address (maps to `mail`) |
-| `company` | text | No | Company name (maps to `company`) |
-| `department` | text | No | Department name (maps to `department`) |
-| `title` | text | No | Job title (maps to `title`) |
-| `address` | text | No | LDAP URL override (takes precedence over `ADDRESS` env var) |
-| `enabled` | boolean | No | Enable or disable the user account (sets `userAccountControl` to 512 or 514) |
-| `password` | text | No | New password for the user (encoded as `unicodePwd` UTF-16LE) |
-| `changePasswordAtNextLogin` | boolean | No | Force the user to change password at next login (sets `pwdLastSet` to `0`) |
-| `additionalAttributes` | object | No | Key-value pairs of additional LDAP attributes to set |
+| Parameter | Type | Required | Description | Example |
+|-----------|------|----------|-------------|---------|
+| `userDN` | text | Yes | Distinguished Name of the user to update | `CN=John Doe,OU=Users,DC=corp,DC=example,DC=com` |
+| `samAccountName` | text | No | SAM account name (maps to `sAMAccountName`) | `jdoe` |
+| `userPrincipalName` | text | No | User principal name / UPN (maps to `userPrincipalName`) | `jdoe@example.com` |
+| `firstName` | text | No | First name (maps to `givenName`) | `John` |
+| `lastName` | text | No | Last name (maps to `sn`) | `Doe` |
+| `displayName` | text | No | Display name (maps to `displayName`) | `John Doe` |
+| `email` | text | No | Email address (maps to `mail`) | `john.doe@example.com` |
+| `company` | text | No | Company name (maps to `company`) | `Example Corp` |
+| `department` | text | No | Department name (maps to `department`) | `Engineering` |
+| `title` | text | No | Job title (maps to `title`) | `Software Engineer` |
+| `password` | text | No | New password for the user (encoded as `unicodePwd` UTF-16LE) | `N3wP@ssw0rd!` |
+| `changePasswordAtNextLogin` | boolean | No | Force the user to change password at next login (sets `pwdLastSet` to `0`) | `true` |
+| `additionalAttributes` | object | No | Key-value pairs of additional LDAP attributes to set | `{"telephoneNumber": "+1-555-0100", "physicalDeliveryOfficeName": "Building A"}` |
+| `address` | text | No | Optional LDAP server URL override | `ldaps://ad.corp.example.com:636` |
 
 At least one attribute must be provided, either via named parameters, the `additionalAttributes` object, or both. Named parameters take precedence over conflicting keys in `additionalAttributes`.
 
@@ -105,15 +104,6 @@ Named parameters can be combined with the `additionalAttributes` object for less
 }
 ```
 
-### Enable/Disable a User Account
-
-```json
-{
-  "userDN": "CN=John Doe,OU=Users,DC=example,DC=com",
-  "enabled": false
-}
-```
-
 ### Set a Password and Force Change at Next Login
 
 ```json
@@ -139,7 +129,6 @@ Named parameters can be combined with the `additionalAttributes` object for less
     "userDN": "CN=John Doe,OU=Users,DC=example,DC=com",
     "firstName": "John",
     "email": "john.doe@example.com",
-    "enabled": true,
     "additionalAttributes": {
       "displayName": "John Doe",
       "department": "Engineering",
@@ -194,7 +183,6 @@ This action uses the LDAP `replace` modification type for each attribute. The `r
 
 | Parameter | LDAP Attribute | Notes |
 |-----------|---------------|-------|
-| `enabled` | `userAccountControl` | `true` → `512` (normal account), `false` → `514` (disabled account) |
 | `password` | `unicodePwd` | Password is quoted and encoded as UTF-16LE Buffer per AD requirements. Requires LDAPS. |
 | `changePasswordAtNextLogin` | `pwdLastSet` | `true` → sets `pwdLastSet` to `0`, forcing password change at next login |
 
@@ -203,13 +191,6 @@ This action uses the LDAP `replace` modification type for each attribute. The `r
 Active Directory requires passwords to be set via the `unicodePwd` attribute as a UTF-16LE encoded, double-quoted string. This action handles the encoding automatically -- simply pass the plaintext password as the `password` parameter.
 
 **Note:** Password changes require an LDAPS (SSL/TLS) connection. Attempting to set a password over unencrypted LDAP will be rejected by Active Directory.
-
-### User Account Control (UAC)
-
-The `enabled` parameter sets the `userAccountControl` attribute:
-
-- `enabled: true` → `512` (NORMAL_ACCOUNT)
-- `enabled: false` → `514` (NORMAL_ACCOUNT | ACCOUNTDISABLE)
 
 ### Common AD Attributes
 
@@ -274,27 +255,57 @@ Multi-valued attributes (e.g., `otherTelephone`, `proxyAddresses`) can be passed
 
 ## Development
 
+### Setup
+
 ```bash
-# Install dependencies
 npm install
+```
 
-# Run unit tests
+### Run tests
+
+```bash
 npm test
+```
 
-# Run tests in watch mode
+### Run tests in watch mode
+
+```bash
 npm run test:watch
+```
 
-# Build distribution bundle
+### Build
+
+```bash
 npm run build
+```
 
-# Validate metadata
+### Validate metadata
+
+```bash
 npm run validate
+```
 
-# Lint code
+### Lint
+
+```bash
 npm run lint
 npm run lint:fix
+```
 
-# Run locally with mock data
+### Local testing
+
+Create a `../.env` file with your AD credentials:
+
+```
+AD_ADDRESS=ldap://your-dc.example.com:389
+LDAP_BIND_DN=CN=admin,DC=example,DC=com
+LDAP_BIND_PASSWORD=your-password
+TLS_SKIP_VERIFY=false
+```
+
+Then run:
+
+```bash
 npm run dev
 ```
 
@@ -331,5 +342,6 @@ npm run dev
 
 ## Support
 
-- [SGNL Documentation](https://docs.sgnl.ai)
-- [GitHub Issues](https://github.com/sgnl-actions/ad-update-user/issues)
+- [ldapts Documentation](https://github.com/ldapts/ldapts)
+- [Active Directory LDAP Reference](https://docs.microsoft.com/en-us/windows/win32/ad/active-directory-domain-services)
+- [SGNL Actions Documentation](https://github.com/sgnl-actions)

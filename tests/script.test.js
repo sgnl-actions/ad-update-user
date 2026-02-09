@@ -421,55 +421,6 @@ describe('AD Update User Script', () => {
     });
   });
 
-  describe('enabled parameter', () => {
-    test('should set userAccountControl to 512 when enabled is true', async () => {
-      const params = {
-        userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
-        enabled: true
-      };
-
-      const result = await script.invoke(params, mockContext);
-
-      expect(result.status).toBe('success');
-      expect(result.attributes).toContain('userAccountControl');
-      expect(mockModify).toHaveBeenCalledWith(
-        'CN=John Doe,OU=Users,DC=example,DC=com',
-        [
-          { operation: 'replace', modification: { type: 'userAccountControl', values: ['512'] } }
-        ]
-      );
-    });
-
-    test('should set userAccountControl to 514 when enabled is false', async () => {
-      const params = {
-        userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
-        enabled: false
-      };
-
-      const result = await script.invoke(params, mockContext);
-
-      expect(result.status).toBe('success');
-      expect(result.attributes).toContain('userAccountControl');
-      expect(mockModify).toHaveBeenCalledWith(
-        'CN=John Doe,OU=Users,DC=example,DC=com',
-        [
-          { operation: 'replace', modification: { type: 'userAccountControl', values: ['514'] } }
-        ]
-      );
-    });
-
-    test('should not set userAccountControl when enabled is omitted', async () => {
-      const params = {
-        userDN: 'CN=John Doe,OU=Users,DC=example,DC=com',
-        firstName: 'John'
-      };
-
-      const result = await script.invoke(params, mockContext);
-
-      expect(result.attributes).not.toContain('userAccountControl');
-    });
-  });
-
   describe('password parameter', () => {
     test('should set unicodePwd as encoded Buffer when password is provided', async () => {
       const params = {
