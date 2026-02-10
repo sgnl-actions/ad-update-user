@@ -2,14 +2,25 @@ name: ad-update-user
 description: Update user attributes in on-premise Active Directory via LDAP
 
 inputs:
-  userDN:
+  baseDN:
     type: text
-    description: Distinguished Name of the user to update (e.g., CN=John Doe,OU=Users,DC=example,DC=com)
+    description: Base DN to search for the user (e.g., DC=corp,DC=example,DC=com)
     required: true
+    validation:
+      min: 1
+      max: 500
 
   samAccountName:
     type: text
-    description: SAM account name (maps to sAMAccountName)
+    description: The user's sAMAccountName (pre-Windows 2000 logon name) to lookup
+    required: true
+    validation:
+      min: 1
+      max: 256
+
+  newSamAccountName:
+    type: text
+    description: New SAM account name if renaming (maps to sAMAccountName)
     required: false
 
   userPrincipalName:
@@ -52,16 +63,6 @@ inputs:
     description: Job title (maps to title)
     required: false
 
-  address:
-    type: text
-    description: Optional LDAP/LDAPS URL override (e.g., ldaps://dc.example.com:636)
-    required: false
-
-  enabled:
-    type: boolean
-    description: Enable or disable the user account (sets userAccountControl to 512 or 514)
-    required: false
-
   password:
     type: text
     description: New password for the user (encoded as unicodePwd UTF-16LE)
@@ -82,6 +83,11 @@ inputs:
     description: When true, validates parameters and logs intended actions without making changes to Active Directory
     required: false
 
+  address:
+    type: text
+    description: Optional LDAP server URL override
+    required: false
+
 outputs:
   status:
     type: text
@@ -89,7 +95,7 @@ outputs:
 
   userDN:
     type: text
-    description: Distinguished Name of the updated user
+    description: The resolved Distinguished Name of the user
 
   modified:
     type: boolean

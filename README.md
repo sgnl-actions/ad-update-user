@@ -4,7 +4,7 @@ Update user attributes in on-premise Active Directory via LDAP/LDAPS.
 
 ## Overview
 
-This action modifies user attributes in Active Directory using the LDAP `replace` operation via the `ldapts` library. The `replace` operation is inherently idempotent -- setting the same attribute to the same value multiple times produces no errors and no side effects.
+This action modifies user attributes in Active Directory using the LDAP `replace` operation via the `ldapts` library. It first looks up the user by their `sAMAccountName`, then applies the requested attribute changes. The `replace` operation is inherently idempotent -- setting the same attribute to the same value multiple times produces no errors and no side effects.
 
 Supports updating any combination of standard AD user attributes in a single call. Scalar values are automatically wrapped in arrays as required by the LDAP protocol.
 
@@ -12,7 +12,7 @@ Supports updating any combination of standard AD user attributes in a single cal
 
 - Network access to an Active Directory Domain Controller (LDAP port 389 or LDAPS port 636)
 - A service account with **Write** permissions on the target user objects
-- The Distinguished Name (DN) of the user to update
+- The user's `sAMAccountName` (pre-Windows 2000 logon name)
 - For password changes, LDAPS (port 636) is required by Active Directory
 
 ## Configuration
@@ -33,23 +33,24 @@ Supports updating any combination of standard AD user attributes in a single cal
 
 ### Input Parameters
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `userDN` | text | Yes | Distinguished Name of the user to update |
-| `samAccountName` | text | No | SAM account name (maps to `sAMAccountName`) |
-| `userPrincipalName` | text | No | User principal name / UPN (maps to `userPrincipalName`) |
-| `firstName` | text | No | First name (maps to `givenName`) |
-| `lastName` | text | No | Last name (maps to `sn`) |
-| `displayName` | text | No | Display name (maps to `displayName`) |
-| `email` | text | No | Email address (maps to `mail`) |
-| `company` | text | No | Company name (maps to `company`) |
-| `department` | text | No | Department name (maps to `department`) |
-| `title` | text | No | Job title (maps to `title`) |
-| `address` | text | No | LDAP URL override (takes precedence over `ADDRESS` env var) |
-| `enabled` | boolean | No | Enable or disable the user account (sets `userAccountControl` to 512 or 514) |
-| `password` | text | No | New password for the user (encoded as `unicodePwd` UTF-16LE) |
-| `changePasswordAtNextLogin` | boolean | No | Force the user to change password at next login (sets `pwdLastSet` to `0`) |
-| `additionalAttributes` | object | No | Key-value pairs of additional LDAP attributes to set |
+| Parameter | Type | Required | Description | Example |
+|-----------|------|----------|-------------|---------|
+| `baseDN` | text | Yes | Base DN to search for the user | `DC=corp,DC=example,DC=com` |
+| `samAccountName` | text | Yes | The user's sAMAccountName (pre-Windows 2000 logon name) to lookup | `jdoe` |
+| `newSamAccountName` | text | No | New SAM account name if renaming (maps to `sAMAccountName`) | `johndoe` |
+| `userPrincipalName` | text | No | User principal name / UPN (maps to `userPrincipalName`) | `jdoe@example.com` |
+| `firstName` | text | No | First name (maps to `givenName`) | `John` |
+| `lastName` | text | No | Last name (maps to `sn`) | `Doe` |
+| `displayName` | text | No | Display name (maps to `displayName`) | `John Doe` |
+| `email` | text | No | Email address (maps to `mail`) | `john.doe@example.com` |
+| `company` | text | No | Company name (maps to `company`) | `Example Corp` |
+| `department` | text | No | Department name (maps to `department`) | `Engineering` |
+| `title` | text | No | Job title (maps to `title`) | `Software Engineer` |
+| `password` | text | No | New password for the user (encoded as `unicodePwd` UTF-16LE) | `N3wP@ssw0rd!` |
+| `changePasswordAtNextLogin` | boolean | No | Force the user to change password at next login (sets `pwdLastSet` to `0`) | `true` |
+| `additionalAttributes` | object | No | Key-value pairs of additional LDAP attributes to set | `{"telephoneNumber": "+1-555-0100", "physicalDeliveryOfficeName": "Building A"}` |
+| `dry_run` | boolean | No | When true, validates parameters without making changes | `false` |
+| `address` | text | No | Optional LDAP server URL override | `ldaps://ad.corp.example.com:636` |
 
 At least one attribute must be provided, either via named parameters, the `additionalAttributes` object, or both. Named parameters take precedence over conflicting keys in `additionalAttributes`.
 
@@ -57,8 +58,8 @@ At least one attribute must be provided, either via named parameters, the `addit
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `status` | text | `success` or `halted` |
-| `userDN` | text | DN of the updated user |
+| `status` | text | `success`, `dry_run_completed`, or `halted` |
+| `userDN` | text | The resolved Distinguished Name of the user |
 | `modified` | boolean | `true` if attributes were updated |
 | `attributes` | array | List of attribute names that were modified |
 | `address` | text | LDAP server address used |
@@ -69,12 +70,10 @@ At least one attribute must be provided, either via named parameters, the `addit
 
 ```json
 {
-  "userDN": "CN=John Doe,OU=Users,DC=example,DC=com",
-  "additionalAttributes": {
-    "displayName": "John Doe",
-    "mail": "john.doe@example.com",
-    "department": "Engineering"
-  }
+  "baseDN": "DC=corp,DC=example,DC=com",
+  "samAccountName": "jdoe",
+  "email": "john.doe@example.com",
+  "department": "Engineering"
 }
 ```
 
@@ -82,7 +81,8 @@ At least one attribute must be provided, either via named parameters, the `addit
 
 ```json
 {
-  "userDN": "CN=John Doe,OU=Users,DC=example,DC=com",
+  "baseDN": "DC=corp,DC=example,DC=com",
+  "samAccountName": "jdoe",
   "firstName": "John",
   "lastName": "Doe",
   "email": "john.doe@example.com",
@@ -95,7 +95,8 @@ Named parameters can be combined with the `additionalAttributes` object for less
 
 ```json
 {
-  "userDN": "CN=John Doe,OU=Users,DC=example,DC=com",
+  "baseDN": "DC=corp,DC=example,DC=com",
+  "samAccountName": "jdoe",
   "firstName": "John",
   "email": "john.doe@example.com",
   "additionalAttributes": {
@@ -105,22 +106,24 @@ Named parameters can be combined with the `additionalAttributes` object for less
 }
 ```
 
-### Enable/Disable a User Account
-
-```json
-{
-  "userDN": "CN=John Doe,OU=Users,DC=example,DC=com",
-  "enabled": false
-}
-```
-
 ### Set a Password and Force Change at Next Login
 
 ```json
 {
-  "userDN": "CN=John Doe,OU=Users,DC=example,DC=com",
+  "baseDN": "DC=corp,DC=example,DC=com",
+  "samAccountName": "jdoe",
   "password": "N3wP@ssw0rd!",
   "changePasswordAtNextLogin": true
+}
+```
+
+### Rename a User's SAM Account Name
+
+```json
+{
+  "baseDN": "DC=corp,DC=example,DC=com",
+  "samAccountName": "jdoe",
+  "newSamAccountName": "johndoe"
 }
 ```
 
@@ -136,10 +139,10 @@ Named parameters can be combined with the `additionalAttributes` object for less
     "type": "nodejs"
   },
   "script_inputs": {
-    "userDN": "CN=John Doe,OU=Users,DC=example,DC=com",
+    "baseDN": "DC=corp,DC=example,DC=com",
+    "samAccountName": "jdoe",
     "firstName": "John",
     "email": "john.doe@example.com",
-    "enabled": true,
     "additionalAttributes": {
       "displayName": "John Doe",
       "department": "Engineering",
@@ -168,6 +171,16 @@ For development or self-signed certificate environments:
 
 ## API Details
 
+### User Lookup
+
+The action first searches for the user by `sAMAccountName`:
+
+```
+SEARCH baseDN (scope=sub, filter=(&(objectClass=user)(sAMAccountName=<samAccountName>)))
+```
+
+This returns the user's Distinguished Name, which is then used for the modify operation.
+
 ### LDAP Modify/Replace Operation
 
 This action uses the LDAP `replace` modification type for each attribute. The `replace` operation:
@@ -180,7 +193,7 @@ This action uses the LDAP `replace` modification type for each attribute. The `r
 
 | Named Parameter | LDAP Attribute |
 |-----------------|---------------|
-| `samAccountName` | `sAMAccountName` |
+| `newSamAccountName` | `sAMAccountName` |
 | `userPrincipalName` | `userPrincipalName` |
 | `firstName` | `givenName` |
 | `lastName` | `sn` |
@@ -194,7 +207,6 @@ This action uses the LDAP `replace` modification type for each attribute. The `r
 
 | Parameter | LDAP Attribute | Notes |
 |-----------|---------------|-------|
-| `enabled` | `userAccountControl` | `true` → `512` (normal account), `false` → `514` (disabled account) |
 | `password` | `unicodePwd` | Password is quoted and encoded as UTF-16LE Buffer per AD requirements. Requires LDAPS. |
 | `changePasswordAtNextLogin` | `pwdLastSet` | `true` → sets `pwdLastSet` to `0`, forcing password change at next login |
 
@@ -203,13 +215,6 @@ This action uses the LDAP `replace` modification type for each attribute. The `r
 Active Directory requires passwords to be set via the `unicodePwd` attribute as a UTF-16LE encoded, double-quoted string. This action handles the encoding automatically -- simply pass the plaintext password as the `password` parameter.
 
 **Note:** Password changes require an LDAPS (SSL/TLS) connection. Attempting to set a password over unencrypted LDAP will be rejected by Active Directory.
-
-### User Account Control (UAC)
-
-The `enabled` parameter sets the `userAccountControl` attribute:
-
-- `enabled: true` → `512` (NORMAL_ACCOUNT)
-- `enabled: false` → `514` (NORMAL_ACCOUNT | ACCOUNTDISABLE)
 
 ### Common AD Attributes
 
@@ -256,13 +261,14 @@ Multi-valued attributes (e.g., `otherTelephone`, `proxyAddresses`) can be passed
 
 ### Fatal Errors
 
-| LDAP Code | Error | Description |
-|-----------|-------|-------------|
-| 32 | No Such Object | The `userDN` does not exist in AD |
-| 19 | Constraint Violation | Attribute value violates AD schema constraints |
-| 17 | Undefined Attribute Type | Attribute name not recognized by the AD schema |
-| 49 | Invalid Credentials | Bind DN or password is incorrect |
-| 50 | Insufficient Access Rights | Service account lacks Write permission |
+| Error | Description |
+|-------|-------------|
+| User not found with sAMAccountName | No user exists with the specified sAMAccountName |
+| Multiple users found | More than one user matches the sAMAccountName (should not happen in a properly configured AD) |
+| Invalid Credentials | Bind DN or password is incorrect |
+| Insufficient Access Rights | Service account lacks Write permission |
+| Constraint Violation | Attribute value violates AD schema constraints |
+| Undefined Attribute Type | Attribute name not recognized by the AD schema |
 
 ## Security Considerations
 
@@ -271,34 +277,70 @@ Multi-valued attributes (e.g., `otherTelephone`, `proxyAddresses`) can be passed
 - Only skip TLS verification (`TLS_SKIP_VERIFY=true`) in development environments
 - The service account should have minimal permissions -- only Write access on the specific user attributes needed
 - Attribute values are not logged; only attribute names appear in the output to avoid leaking sensitive data
+- Special characters in sAMAccountName are escaped to prevent LDAP injection
 
 ## Development
 
+### Setup
+
 ```bash
-# Install dependencies
 npm install
+```
 
-# Run unit tests
+### Run tests
+
+```bash
 npm test
+```
 
-# Run tests in watch mode
+### Run tests in watch mode
+
+```bash
 npm run test:watch
+```
 
-# Build distribution bundle
+### Build
+
+```bash
 npm run build
+```
 
-# Validate metadata
+### Validate metadata
+
+```bash
 npm run validate
+```
 
-# Lint code
+### Lint
+
+```bash
 npm run lint
 npm run lint:fix
+```
 
-# Run locally with mock data
+### Local testing
+
+Create a `../.env` file with your AD credentials:
+
+```
+AD_ADDRESS=ldap://your-dc.example.com:389
+LDAP_BIND_DN=CN=admin,DC=example,DC=com
+LDAP_BIND_PASSWORD=your-password
+TLS_SKIP_VERIFY=false
+```
+
+Then run:
+
+```bash
 npm run dev
 ```
 
 ## Troubleshooting
+
+### User Lookup Issues
+
+- **"User not found with sAMAccountName"** -- Verify the sAMAccountName is correct (case-insensitive in AD) and that the user exists within the specified baseDN
+- **"Multiple users found"** -- This should not happen in a properly configured AD since sAMAccountName must be unique within a domain
 
 ### Connection Issues
 
@@ -331,5 +373,6 @@ npm run dev
 
 ## Support
 
-- [SGNL Documentation](https://docs.sgnl.ai)
-- [GitHub Issues](https://github.com/sgnl-actions/ad-update-user/issues)
+- [ldapts Documentation](https://github.com/ldapts/ldapts)
+- [Active Directory LDAP Reference](https://docs.microsoft.com/en-us/windows/win32/ad/active-directory-domain-services)
+- [SGNL Actions Documentation](https://github.com/sgnl-actions)
