@@ -82,6 +82,9 @@ async function updateUserAttributes(userDN, attributes, client) {
  * @param {Client} client - The ldapts client
  */
 async function safeUnbind(client) {
+  if (!client) {
+    return;
+  }
   try {
     await client.unbind();
   } catch (unbindError) {
