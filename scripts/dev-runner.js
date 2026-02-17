@@ -30,11 +30,15 @@ const mockContext = {
 const mockParams = {
   baseDN: 'DC=corp,DC=example,DC=com',
   samAccountName: 'jsmith',
+  // objectGUID: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', // Use instead of samAccountName when renaming
   firstName: 'John',
   lastName: 'Smith',
   email: 'john.smith@example.com',
-  department: 'Product',
-  title: 'Senior Engineer',
+  department: 'Engineering',
+  title: 'Software Engineer',
+  additionalAttributes: {
+    telephoneNumber: '+1-555-0100',
+  },
   dry_run: process.env.DRY_RUN === 'true',
 };
 

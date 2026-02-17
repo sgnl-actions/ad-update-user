@@ -19,6 +19,15 @@ jest.unstable_mockModule('ldapts', () => ({
   Attribute: jest.fn().mockImplementation((opts) => ({
     type: opts.type,
     values: opts.values
+  })),
+  EqualityFilter: jest.fn().mockImplementation((opts) => ({
+    type: 'EqualityFilter',
+    attribute: opts.attribute,
+    value: opts.value
+  })),
+  AndFilter: jest.fn().mockImplementation((opts) => ({
+    type: 'AndFilter',
+    filters: opts.filters
   }))
 }));
 
@@ -286,10 +295,10 @@ describe('AD Update User Script', () => {
       expect(mockBind).not.toHaveBeenCalled();
     });
 
-    test('should throw when samAccountName is missing', async () => {
+    test('should throw when neither samAccountName nor objectGUID is provided', async () => {
       const params = { baseDN: 'DC=example,DC=com', firstName: 'John' };
 
-      await expect(script.invoke(params, mockContext)).rejects.toThrow('samAccountName is required');
+      await expect(script.invoke(params, mockContext)).rejects.toThrow('Either samAccountName or objectGUID is required');
       expect(mockBind).not.toHaveBeenCalled();
     });
   });
@@ -536,6 +545,76 @@ describe('AD Update User Script', () => {
     });
   });
 
+  describe('special characters in attributes', () => {
+    test('should handle apostrophe in lastName (O\'Shea)', async () => {
+      const params = {
+        ...defaultParams,
+        lastName: "O'Shea"
+      };
+
+      const result = await script.invoke(params, mockContext);
+
+      expect(result.status).toBe('success');
+      expect(mockModify).toHaveBeenCalledWith(
+        resolvedUserDN,
+        [
+          { operation: 'replace', modification: { type: 'sn', values: ["O'Shea"] } }
+        ]
+      );
+    });
+
+    test('should handle dashes in department', async () => {
+      const params = {
+        ...defaultParams,
+        department: 'team - engineering'
+      };
+
+      const result = await script.invoke(params, mockContext);
+
+      expect(result.status).toBe('success');
+      expect(mockModify).toHaveBeenCalledWith(
+        resolvedUserDN,
+        [
+          { operation: 'replace', modification: { type: 'department', values: ['team - engineering'] } }
+        ]
+      );
+    });
+
+    test('should handle forward slash in title', async () => {
+      const params = {
+        ...defaultParams,
+        title: 'Sales/Marketing Lead'
+      };
+
+      const result = await script.invoke(params, mockContext);
+
+      expect(result.status).toBe('success');
+      expect(mockModify).toHaveBeenCalledWith(
+        resolvedUserDN,
+        [
+          { operation: 'replace', modification: { type: 'title', values: ['Sales/Marketing Lead'] } }
+        ]
+      );
+    });
+
+    test('should escape backslash in samAccountName for LDAP filter', async () => {
+      const params = {
+        baseDN: 'DC=example,DC=com',
+        samAccountName: 'domain\\user',
+        firstName: 'John'
+      };
+
+      mockSearch.mockImplementation((baseDN, options) => {
+        expect(options.filter).toContain('domain\\5cuser');
+        return Promise.resolve({
+          searchEntries: [{ dn: resolvedUserDN }]
+        });
+      });
+
+      await script.invoke(params, mockContext);
+    });
+  });
+
   describe('LDAP filter escaping', () => {
     test('should escape special characters in sAMAccountName for LDAP filter', async () => {
       const paramsWithSpecialChars = {
@@ -553,6 +632,139 @@ describe('AD Update User Script', () => {
       });
 
       await script.invoke(paramsWithSpecialChars, mockContext);
+    });
+  });
+
+  describe('objectGUID-based lookup', () => {
+    const testGUID = '550e8400-e29b-41d4-a716-446655440000';
+
+    test('should encode objectGUID correctly as mixed-endian Buffer in EqualityFilter', async () => {
+      // 550e8400-e29b-41d4-a716-446655440000
+      // First group little-endian: 00,84,0e,55
+      // Second group little-endian: 9b,e2
+      // Third group little-endian: d4,41
+      // Last two groups big-endian: a7,16,44,66,55,44,00,00
+      const expectedBytes = [
+        0x00, 0x84, 0x0e, 0x55,
+        0x9b, 0xe2,
+        0xd4, 0x41,
+        0xa7, 0x16, 0x44, 0x66, 0x55, 0x44, 0x00, 0x00
+      ];
+
+      const params = {
+        baseDN: 'DC=example,DC=com',
+        objectGUID: testGUID,
+        firstName: 'John'
+      };
+
+      mockSearch.mockImplementation((_baseDN, options) => {
+        // filter is an AndFilter object; find the objectGUID EqualityFilter
+        const guidFilter = options.filter.filters.find(f => f.attribute === 'objectGUID');
+        expect(guidFilter).toBeDefined();
+        expect(Buffer.isBuffer(guidFilter.value)).toBe(true);
+        expect([...guidFilter.value]).toEqual(expectedBytes);
+        return Promise.resolve({ searchEntries: [{ dn: resolvedUserDN }] });
+      });
+
+      await script.invoke(params, mockContext);
+    });
+
+    test('should successfully look up user by objectGUID alone (no samAccountName)', async () => {
+      const params = {
+        baseDN: 'DC=example,DC=com',
+        objectGUID: testGUID,
+        firstName: 'John'
+      };
+
+      const result = await script.invoke(params, mockContext);
+
+      expect(result.status).toBe('success');
+      expect(result.userDN).toBe(resolvedUserDN);
+      expect(result.modified).toBe(true);
+      // Filter is an AndFilter object (not a string) when using objectGUID
+      const [[_baseDN, searchOptions]] = mockSearch.mock.calls;
+      expect(searchOptions.filter.type).toBe('AndFilter');
+      expect(searchOptions.filter.filters.some(f => f.attribute === 'objectGUID')).toBe(true);
+    });
+
+    test('should use objectGUID for lookup when both samAccountName and objectGUID are provided', async () => {
+      const params = {
+        baseDN: 'DC=example,DC=com',
+        samAccountName: 'jdoe',
+        objectGUID: testGUID,
+        newSamAccountName: 'johndoe'
+      };
+
+      const result = await script.invoke(params, mockContext);
+
+      expect(result.status).toBe('success');
+      // Filter must be an AndFilter (objectGUID path) not a sAMAccountName string filter
+      const [[_baseDN, searchOptions]] = mockSearch.mock.calls;
+      expect(searchOptions.filter.type).toBe('AndFilter');
+      expect(searchOptions.filter.filters.some(f => f.attribute === 'objectGUID')).toBe(true);
+      expect(searchOptions.filter.filters.every(f => f.attribute !== 'sAMAccountName')).toBe(true);
+      // sAMAccountName attribute is still updated on the user
+      expect(result.attributes).toContain('sAMAccountName');
+    });
+
+    test('should reject invalid objectGUID format before making any LDAP connection', async () => {
+      const params = {
+        baseDN: 'DC=example,DC=com',
+        objectGUID: 'not-a-valid-guid',
+        firstName: 'John'
+      };
+
+      await expect(script.invoke(params, mockContext)).rejects.toThrow(
+        'objectGUID must be in UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+      );
+      expect(mockBind).not.toHaveBeenCalled();
+    });
+
+    test('should reject objectGUID with wrong number of segments', async () => {
+      const params = {
+        baseDN: 'DC=example,DC=com',
+        objectGUID: '550e8400-e29b-41d4-a716',
+        firstName: 'John'
+      };
+
+      await expect(script.invoke(params, mockContext)).rejects.toThrow(
+        'objectGUID must be in UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+      );
+      expect(mockBind).not.toHaveBeenCalled();
+    });
+
+    test('should throw when user not found by objectGUID', async () => {
+      mockSearch.mockResolvedValue({ searchEntries: [] });
+
+      const params = {
+        baseDN: 'DC=example,DC=com',
+        objectGUID: testGUID,
+        firstName: 'John'
+      };
+
+      await expect(script.invoke(params, mockContext)).rejects.toThrow(
+        `User not found with objectGUID: ${testGUID}`
+      );
+    });
+
+    test('should return dry_run_completed with objectGUID when dry_run is true', async () => {
+      const params = {
+        baseDN: 'DC=example,DC=com',
+        objectGUID: testGUID,
+        firstName: 'John',
+        dry_run: true
+      };
+
+      const result = await script.invoke(params, mockContext);
+
+      expect(result.status).toBe('dry_run_completed');
+      expect(result.baseDN).toBe('DC=example,DC=com');
+      expect(result.objectGUID).toBe(testGUID);
+      expect(result.samAccountName).toBeNull();
+      expect(result.userDN).toBeNull();
+      expect(result.modified).toBe(false);
+      expect(result.attributes).toContain('givenName');
+      expect(mockBind).not.toHaveBeenCalled();
     });
   });
 });

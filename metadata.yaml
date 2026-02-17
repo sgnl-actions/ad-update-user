@@ -12,11 +12,19 @@ inputs:
 
   samAccountName:
     type: text
-    description: The user's sAMAccountName (pre-Windows 2000 logon name) to lookup
-    required: true
+    description: The user's sAMAccountName (pre-Windows 2000 logon name) to lookup. Required if objectGUID is not provided.
+    required: false
     validation:
       min: 1
       max: 256
+
+  objectGUID:
+    type: text
+    description: >
+      The immutable objectGUID of the user in Active Directory. When provided,
+      this is used for lookup instead of samAccountName, enabling updates even
+      when the samAccountName is being changed. Format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.
+    required: false
 
   newSamAccountName:
     type: text

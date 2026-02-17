@@ -4,7 +4,7 @@ Update user attributes in on-premise Active Directory via LDAP/LDAPS.
 
 ## Overview
 
-This action modifies user attributes in Active Directory using the LDAP `replace` operation via the `ldapts` library. It first looks up the user by their `sAMAccountName`, then applies the requested attribute changes. The `replace` operation is inherently idempotent -- setting the same attribute to the same value multiple times produces no errors and no side effects.
+This action modifies user attributes in Active Directory using the LDAP `replace` operation via the `ldapts` library. It first looks up the user by their `sAMAccountName` or immutable `objectGUID`, then applies the requested attribute changes. The `replace` operation is inherently idempotent -- setting the same attribute to the same value multiple times produces no errors and no side effects.
 
 Supports updating any combination of standard AD user attributes in a single call. Scalar values are automatically wrapped in arrays as required by the LDAP protocol.
 
@@ -12,7 +12,7 @@ Supports updating any combination of standard AD user attributes in a single cal
 
 - Network access to an Active Directory Domain Controller (LDAP port 389 or LDAPS port 636)
 - A service account with **Write** permissions on the target user objects
-- The user's `sAMAccountName` (pre-Windows 2000 logon name)
+- The user's `sAMAccountName` (pre-Windows 2000 logon name) or `objectGUID` for lookup
 - For password changes, LDAPS (port 636) is required by Active Directory
 
 ## Configuration
@@ -36,7 +36,8 @@ Supports updating any combination of standard AD user attributes in a single cal
 | Parameter | Type | Required | Description | Example |
 |-----------|------|----------|-------------|---------|
 | `baseDN` | text | Yes | Base DN to search for the user | `DC=corp,DC=example,DC=com` |
-| `samAccountName` | text | Yes | The user's sAMAccountName (pre-Windows 2000 logon name) to lookup | `jdoe` |
+| `samAccountName` | text | No | The user's sAMAccountName (pre-Windows 2000 logon name) to lookup. Required if `objectGUID` is not provided. | `jdoe` |
+| `objectGUID` | text | No | Immutable AD object GUID for user lookup. Use instead of `samAccountName` when renaming the SAM account. Format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` | `550e8400-e29b-41d4-a716-446655440000` |
 | `newSamAccountName` | text | No | New SAM account name if renaming (maps to `sAMAccountName`) | `johndoe` |
 | `userPrincipalName` | text | No | User principal name / UPN (maps to `userPrincipalName`) | `jdoe@example.com` |
 | `firstName` | text | No | First name (maps to `givenName`) | `John` |
@@ -51,6 +52,8 @@ Supports updating any combination of standard AD user attributes in a single cal
 | `additionalAttributes` | object | No | Key-value pairs of additional LDAP attributes to set | `{"telephoneNumber": "+1-555-0100", "physicalDeliveryOfficeName": "Building A"}` |
 | `dry_run` | boolean | No | When true, validates parameters without making changes | `false` |
 | `address` | text | No | Optional LDAP server URL override | `ldaps://ad.corp.example.com:636` |
+
+At least one of `samAccountName` or `objectGUID` must be provided for user lookup. When `objectGUID` is provided, it takes precedence and is used for the LDAP search.
 
 At least one attribute must be provided, either via named parameters, the `additionalAttributes` object, or both. Named parameters take precedence over conflicting keys in `additionalAttributes`.
 
@@ -127,6 +130,19 @@ Named parameters can be combined with the `additionalAttributes` object for less
 }
 ```
 
+### Rename a User's SAM Account Name (using objectGUID)
+
+When a `samAccountName` change is triggered and only the new value is available,
+use `objectGUID` for the lookup instead:
+
+```json
+{
+  "baseDN": "DC=corp,DC=example,DC=com",
+  "objectGUID": "550e8400-e29b-41d4-a716-446655440000",
+  "newSamAccountName": "johndoe"
+}
+```
+
 ### Full Job Specification
 
 ```json
@@ -173,13 +189,21 @@ For development or self-signed certificate environments:
 
 ### User Lookup
 
-The action first searches for the user by `sAMAccountName`:
+By default, the action searches for the user by `sAMAccountName`:
 
 ```
 SEARCH baseDN (scope=sub, filter=(&(objectClass=user)(sAMAccountName=<samAccountName>)))
 ```
 
-This returns the user's Distinguished Name, which is then used for the modify operation.
+When `objectGUID` is provided, it is used instead (encoded as an LDAP octet string):
+
+```
+SEARCH baseDN (scope=sub, filter=(&(objectClass=user)(objectGUID=\xx\xx...)))
+```
+
+Using `objectGUID` is recommended when the `samAccountName` itself is being changed, as the GUID is permanently immutable and uniquely identifies the AD object regardless of any attribute changes.
+
+The lookup returns the user's Distinguished Name, which is then used for the modify operation.
 
 ### LDAP Modify/Replace Operation
 
@@ -263,7 +287,7 @@ Multi-valued attributes (e.g., `otherTelephone`, `proxyAddresses`) can be passed
 
 | Error | Description |
 |-------|-------------|
-| User not found with sAMAccountName | No user exists with the specified sAMAccountName |
+| User not found | No user exists with the specified `sAMAccountName` or `objectGUID` |
 | Multiple users found | More than one user matches the sAMAccountName (should not happen in a properly configured AD) |
 | Invalid Credentials | Bind DN or password is incorrect |
 | Insufficient Access Rights | Service account lacks Write permission |
@@ -341,6 +365,7 @@ npm run dev
 
 - **"User not found with sAMAccountName"** -- Verify the sAMAccountName is correct (case-insensitive in AD) and that the user exists within the specified baseDN
 - **"Multiple users found"** -- This should not happen in a properly configured AD since sAMAccountName must be unique within a domain
+- **"samAccountName rename not applying"** -- If the `samAccountName` is being changed, provide the `objectGUID` instead of `samAccountName` for lookup. The GUID is immutable and will locate the user regardless of their current or new SAM account name.
 
 ### Connection Issues
 

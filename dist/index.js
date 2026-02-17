@@ -45,34 +45,80 @@ function getBaseURL(params, context) {
  * @returns {string} The escaped string safe for use in LDAP filters
  */
 function escapeLDAPFilter(str) {
-  return str.replace(/[\\*()]/g, (char) => '\\' + char.charCodeAt(0).toString(16).padStart(2, '0'));
+  return str.replace(/[\\*()\0]/g, (char) => '\\' + char.charCodeAt(0).toString(16).padStart(2, '0'));
 }
 
 /**
- * Find a user's Distinguished Name by searching for their sAMAccountName.
+ * Convert an objectGUID UUID string into a Buffer with AD's mixed-endian byte order.
+ * AD stores objectGUID with little-endian byte order for the first three groups
+ * and big-endian for the last two. The Buffer is passed directly to EqualityFilter
+ * to avoid string-escaping issues in ldapts filter serialization.
+ *
+ * @param {string} guid - UUID string in format xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+ * @returns {Buffer} 16-byte Buffer in AD wire format
+ */
+function guidToBuffer(guid) {
+  const hex = guid.replace(/-/g, '');
+  const bytes = [
+    // First group (4 bytes) — little-endian
+    parseInt(hex.slice(6, 8), 16), parseInt(hex.slice(4, 6), 16),
+    parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(0, 2), 16),
+    // Second group (2 bytes) — little-endian
+    parseInt(hex.slice(10, 12), 16), parseInt(hex.slice(8, 10), 16),
+    // Third group (2 bytes) — little-endian
+    parseInt(hex.slice(14, 16), 16), parseInt(hex.slice(12, 14), 16),
+    // Last two groups (8 bytes) — big-endian
+    parseInt(hex.slice(16, 18), 16), parseInt(hex.slice(18, 20), 16),
+    parseInt(hex.slice(20, 22), 16), parseInt(hex.slice(22, 24), 16),
+    parseInt(hex.slice(24, 26), 16), parseInt(hex.slice(26, 28), 16),
+    parseInt(hex.slice(28, 30), 16), parseInt(hex.slice(30, 32), 16),
+  ];
+  return Buffer.from(bytes);
+}
+
+/**
+ * Find a user's Distinguished Name by searching for their objectGUID or sAMAccountName.
+ * When objectGUID is provided it takes precedence; otherwise sAMAccountName is used.
  *
  * @param {Client} client - Bound ldapts Client instance
  * @param {string} baseDN - Base DN to search from
- * @param {string} samAccountName - User's sAMAccountName
+ * @param {string} [samAccountName] - User's sAMAccountName
+ * @param {string} [objectGUID] - User's immutable objectGUID (UUID format)
  * @returns {Promise<string>} The user's Distinguished Name
  * @throws {Error} If user not found or multiple users found
  */
-async function findUserDN(client, baseDN, samAccountName) {
-  console.log(`Searching for user with sAMAccountName: ${samAccountName}`);
+async function findUserDN(client, baseDN, samAccountName, objectGUID) {
+  let filter;
+  if (objectGUID) {
+    console.log(`Searching for user with objectGUID: ${objectGUID}`);
+    // Use EqualityFilter with a Buffer so ldapts serializes the binary bytes correctly.
+    // A plain string filter with \xx escapes is mangled by ldapts during serialization.
+    filter = new ldapts.AndFilter({
+      filters: [
+        new ldapts.EqualityFilter({ attribute: 'objectClass', value: 'user' }),
+        new ldapts.EqualityFilter({ attribute: 'objectGUID', value: guidToBuffer(objectGUID) })
+      ]
+    });
+  } else {
+    console.log(`Searching for user with sAMAccountName: ${samAccountName}`);
+    const escapedSamAccountName = escapeLDAPFilter(samAccountName);
+    filter = `(&(objectClass=user)(sAMAccountName=${escapedSamAccountName}))`;
+  }
 
-  const escapedSamAccountName = escapeLDAPFilter(samAccountName);
   const { searchEntries } = await client.search(baseDN, {
     scope: 'sub',
-    filter: `(&(objectClass=user)(sAMAccountName=${escapedSamAccountName}))`,
+    filter,
     attributes: ['distinguishedName']
   });
 
   if (!searchEntries || searchEntries.length === 0) {
-    throw new Error(`User not found with sAMAccountName: ${samAccountName}`);
+    const identifier = objectGUID ? `objectGUID: ${objectGUID}` : `sAMAccountName: ${samAccountName}`;
+    throw new Error(`User not found with ${identifier}`);
   }
 
   if (searchEntries.length > 1) {
-    throw new Error(`Multiple users found with sAMAccountName: ${samAccountName}. Expected exactly one.`);
+    const identifier = objectGUID ? `objectGUID: ${objectGUID}` : `sAMAccountName: ${samAccountName}`;
+    throw new Error(`Multiple users found with ${identifier}. Expected exactly one.`);
   }
 
   const userDN = searchEntries[0].dn;
@@ -170,7 +216,8 @@ var script = {
    *
    * @param {Object} params - Job input parameters
    * @param {string} params.baseDN - Base DN to search for the user
-   * @param {string} params.samAccountName - User's sAMAccountName to lookup
+   * @param {string} [params.samAccountName] - User's sAMAccountName to lookup (required if objectGUID not provided)
+   * @param {string} [params.objectGUID] - Immutable objectGUID for lookup (takes precedence over samAccountName)
    * @param {string} [params.newSamAccountName] - New SAM account name (if renaming)
    * @param {string} [params.userPrincipalName] - User principal name
    * @param {string} [params.firstName] - First name (givenName)
@@ -190,14 +237,17 @@ var script = {
   invoke: async (params, context) => {
     console.log('Starting Active Directory update user operation');
 
-    const { baseDN, samAccountName, dry_run = false } = params;
+    const { baseDN, samAccountName, objectGUID, dry_run = false } = params;
 
     // Validate required parameters
     if (!baseDN) {
       throw new Error('baseDN is required');
     }
-    if (!samAccountName) {
-      throw new Error('samAccountName is required');
+    if (!samAccountName && !objectGUID) {
+      throw new Error('Either samAccountName or objectGUID is required');
+    }
+    if (objectGUID && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(objectGUID)) {
+      throw new Error('objectGUID must be in UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx');
     }
 
     // Build attributes from params
@@ -218,7 +268,8 @@ var script = {
       throw new Error('At least one attribute must be provided');
     }
 
-    console.log(`Planning to update user with sAMAccountName: ${samAccountName}`);
+    const lookupIdentifier = objectGUID ? `objectGUID: ${objectGUID}` : `sAMAccountName: ${samAccountName}`;
+    console.log(`Planning to update user with ${lookupIdentifier}`);
     console.log(`Attributes to update: ${Object.keys(attributes).join(', ')}`);
 
     // Handle dry run - validate and return without making changes
@@ -227,7 +278,8 @@ var script = {
       return {
         status: 'dry_run_completed',
         baseDN,
-        samAccountName,
+        samAccountName: samAccountName || null,
+        objectGUID: objectGUID || null,
         userDN: null,
         modified: false,
         attributes: Object.keys(attributes)
@@ -268,8 +320,8 @@ var script = {
       await client.bind(bindDN, bindPassword);
       console.log('Successfully authenticated to LDAP server');
 
-      // Lookup user DN by sAMAccountName
-      const userDN = await findUserDN(client, baseDN, samAccountName);
+      // Lookup user DN by objectGUID or sAMAccountName
+      const userDN = await findUserDN(client, baseDN, samAccountName, objectGUID);
 
       console.log(`Updating user: ${userDN}`);
       await updateUserAttributes(userDN, attributes, client);
