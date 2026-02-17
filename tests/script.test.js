@@ -536,6 +536,76 @@ describe('AD Update User Script', () => {
     });
   });
 
+  describe('special characters in attributes', () => {
+    test('should handle apostrophe in lastName (O\'Shea)', async () => {
+      const params = {
+        ...defaultParams,
+        lastName: "O'Shea"
+      };
+
+      const result = await script.invoke(params, mockContext);
+
+      expect(result.status).toBe('success');
+      expect(mockModify).toHaveBeenCalledWith(
+        resolvedUserDN,
+        [
+          { operation: 'replace', modification: { type: 'sn', values: ["O'Shea"] } }
+        ]
+      );
+    });
+
+    test('should handle dashes in department', async () => {
+      const params = {
+        ...defaultParams,
+        department: 'team - engineering'
+      };
+
+      const result = await script.invoke(params, mockContext);
+
+      expect(result.status).toBe('success');
+      expect(mockModify).toHaveBeenCalledWith(
+        resolvedUserDN,
+        [
+          { operation: 'replace', modification: { type: 'department', values: ['team - engineering'] } }
+        ]
+      );
+    });
+
+    test('should handle forward slash in title', async () => {
+      const params = {
+        ...defaultParams,
+        title: 'Sales/Marketing Lead'
+      };
+
+      const result = await script.invoke(params, mockContext);
+
+      expect(result.status).toBe('success');
+      expect(mockModify).toHaveBeenCalledWith(
+        resolvedUserDN,
+        [
+          { operation: 'replace', modification: { type: 'title', values: ['Sales/Marketing Lead'] } }
+        ]
+      );
+    });
+
+    test('should escape backslash in samAccountName for LDAP filter', async () => {
+      const params = {
+        baseDN: 'DC=example,DC=com',
+        samAccountName: 'domain\\user',
+        firstName: 'John'
+      };
+
+      mockSearch.mockImplementation((baseDN, options) => {
+        expect(options.filter).toContain('domain\\5cuser');
+        return Promise.resolve({
+          searchEntries: [{ dn: resolvedUserDN }]
+        });
+      });
+
+      await script.invoke(params, mockContext);
+    });
+  });
+
   describe('LDAP filter escaping', () => {
     test('should escape special characters in sAMAccountName for LDAP filter', async () => {
       const paramsWithSpecialChars = {
