@@ -41,7 +41,7 @@ function guidToBuffer(guid) {
     parseInt(hex.slice(16, 18), 16), parseInt(hex.slice(18, 20), 16),
     parseInt(hex.slice(20, 22), 16), parseInt(hex.slice(22, 24), 16),
     parseInt(hex.slice(24, 26), 16), parseInt(hex.slice(26, 28), 16),
-    parseInt(hex.slice(28, 30), 16), parseInt(hex.slice(30, 32), 16),
+    parseInt(hex.slice(28, 30), 16), parseInt(hex.slice(30, 32), 16)
   ];
   return Buffer.from(bytes);
 }
