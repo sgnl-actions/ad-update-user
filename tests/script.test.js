@@ -682,7 +682,7 @@ describe('AD Update User Script', () => {
       expect(result.userDN).toBe(resolvedUserDN);
       expect(result.modified).toBe(true);
       // Filter is an AndFilter object (not a string) when using objectGUID
-      const [[_baseDN, searchOptions]] = mockSearch.mock.calls;
+      const [[, searchOptions]] = mockSearch.mock.calls;
       expect(searchOptions.filter.type).toBe('AndFilter');
       expect(searchOptions.filter.filters.some(f => f.attribute === 'objectGUID')).toBe(true);
     });
@@ -699,7 +699,7 @@ describe('AD Update User Script', () => {
 
       expect(result.status).toBe('success');
       // Filter must be an AndFilter (objectGUID path) not a sAMAccountName string filter
-      const [[_baseDN, searchOptions]] = mockSearch.mock.calls;
+      const [[, searchOptions]] = mockSearch.mock.calls;
       expect(searchOptions.filter.type).toBe('AndFilter');
       expect(searchOptions.filter.filters.some(f => f.attribute === 'objectGUID')).toBe(true);
       expect(searchOptions.filter.filters.every(f => f.attribute !== 'sAMAccountName')).toBe(true);
