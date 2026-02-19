@@ -83,7 +83,7 @@ inputs:
     required: false
 
   additionalAttributes:
-    type: object
+    type: text
     description: Object containing additional LDAP attribute names and values to update
     required: false
 
@@ -114,10 +114,18 @@ outputs:
     type: array
     description: List of attribute names that were updated
 
+  baseDN:
+    type: text
+    description: The base DN used to search for the user
+
+  samAccountName:
+    type: text
+    description: The sAMAccountName used to identify the user
+
+  objectGUID:
+    type: text
+    description: The objectGUID used to identify the user
+
   address:
     type: text
     description: LDAP server address used
-
-  message:
-    type: text
-    description: Additional status message or error details
