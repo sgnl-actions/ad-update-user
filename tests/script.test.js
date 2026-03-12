@@ -4,7 +4,9 @@ import { jest } from '@jest/globals';
 jest.unstable_mockModule('ldapts', () => ({
   Client: jest.fn(),
   Change: jest.fn(),
-  Attribute: jest.fn()
+  Attribute: jest.fn(),
+  EqualityFilter: jest.fn(),
+  AndFilter: jest.fn()
 }));
 
 // Now import and run
