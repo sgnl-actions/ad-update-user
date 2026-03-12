@@ -1,0 +1,9 @@
+# Invalid attribute name during modify operation (LDAP error code 16)
+operation: modify
+result: error
+code: 16
+message: "No such attribute"
+error:
+  name: "LDAPError"
+  code: 16
+  message: "No such attribute - The attribute does not exist in the schema"

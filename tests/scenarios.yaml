@@ -1,0 +1,445 @@
+# LDAP scenarios for ad-update-user action
+action:
+  params:
+    baseDN: DC=corp,DC=example,DC=com
+    samAccountName: jdoe
+    firstName: John
+    lastName: Doe
+    displayName: John Doe
+    email: john.doe@corp.example.com
+    title: Software Engineer
+    department: Engineering
+    dry_run: false
+  context:
+    secrets:
+      LDAP_BIND_DN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+      LDAP_BIND_PASSWORD: ServicePassword123!
+    environment:
+      ADDRESS: ldaps://ad.corp.example.com:636
+
+scenarios:
+  - name: successfully update user attributes
+    steps:
+      - ldap:
+          operation: bind
+          bindDN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+          password: "[MASKED]"
+        fixture: fixtures/200-bind-success.ldap
+      - ldap:
+          operation: search
+          baseDN: DC=corp,DC=example,DC=com
+          scope: sub
+          filter: (&(objectClass=user)(sAMAccountName=jdoe))
+          attributes: [distinguishedName]
+        fixture: fixtures/200-search-success.ldap
+      - ldap:
+          operation: modify
+          dn: CN=John Doe,OU=Users,DC=corp,DC=example,DC=com
+          changes:
+            - operation: replace
+              modification:
+                givenName: [John]
+            - operation: replace
+              modification:
+                sn: [Doe]
+            - operation: replace
+              modification:
+                displayName: [John Doe]
+            - operation: replace
+              modification:
+                mail: [john.doe@corp.example.com]
+            - operation: replace
+              modification:
+                title: [Software Engineer]
+            - operation: replace
+              modification:
+                department: [Engineering]
+        fixture: fixtures/200-modify-success.ldap
+      - ldap:
+          operation: unbind
+        fixture: fixtures/200-unbind-success.ldap
+    invoke:
+      returns:
+        status: success
+        userDN: CN=John Doe,OU=Users,DC=corp,DC=example,DC=com
+        updated: true
+        address: ldaps://ad.corp.example.com:636
+
+  - name: user not found
+    steps:
+      - ldap:
+          operation: bind
+          bindDN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+          password: "[MASKED]"
+        fixture: fixtures/200-bind-success.ldap
+      - ldap:
+          operation: search
+          baseDN: DC=corp,DC=example,DC=com
+          scope: sub
+          filter: (&(objectClass=user)(sAMAccountName=jdoe))
+          attributes: [distinguishedName]
+        fixture: fixtures/200-search-no-results.ldap
+      - ldap:
+          operation: unbind
+        fixture: fixtures/200-unbind-success.ldap
+    invoke:
+      throws: "User not found with sAMAccountName: jdoe"
+    error:
+      throws: "User not found"
+
+  - name: multiple users found with same sAMAccountName
+    steps:
+      - ldap:
+          operation: bind
+          bindDN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+          password: "[MASKED]"
+        fixture: fixtures/200-bind-success.ldap
+      - ldap:
+          operation: search
+          baseDN: DC=corp,DC=example,DC=com
+          scope: sub
+          filter: (&(objectClass=user)(sAMAccountName=jdoe))
+          attributes: [distinguishedName]
+        fixture: fixtures/200-search-multiple-results.ldap
+      - ldap:
+          operation: unbind
+        fixture: fixtures/200-unbind-success.ldap
+    invoke:
+      throws: "Multiple users found with sAMAccountName: jdoe"
+    error:
+      throws: "Multiple users found"
+
+  - name: authentication failed
+    steps:
+      - ldap:
+          operation: bind
+          bindDN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+          password: "[MASKED]"
+        fixture: fixtures/49-bind-error.ldap
+    invoke:
+      throws: "Invalid credentials"
+    error:
+      throws: "LDAP authentication failed"
+
+  - name: insufficient permissions to modify user
+    steps:
+      - ldap:
+          operation: bind
+          bindDN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+          password: "[MASKED]"
+        fixture: fixtures/200-bind-success.ldap
+      - ldap:
+          operation: search
+          baseDN: DC=corp,DC=example,DC=com
+          scope: sub
+          filter: (&(objectClass=user)(sAMAccountName=jdoe))
+          attributes: [distinguishedName]
+        fixture: fixtures/200-search-success.ldap
+      - ldap:
+          operation: modify
+          dn: CN=John Doe,OU=Users,DC=corp,DC=example,DC=com
+          changes:
+            - operation: replace
+              modification:
+                givenName: [John]
+        fixture: fixtures/50-modify-insufficient-permissions.ldap
+      - ldap:
+          operation: unbind
+        fixture: fixtures/200-unbind-success.ldap
+    invoke:
+      throws: "Insufficient access rights"
+    error:
+      throws: "Insufficient LDAP permissions"
+
+  - name: user DN not found during modify
+    steps:
+      - ldap:
+          operation: bind
+          bindDN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+          password: "[MASKED]"
+        fixture: fixtures/200-bind-success.ldap
+      - ldap:
+          operation: search
+          baseDN: DC=corp,DC=example,DC=com
+          scope: sub
+          filter: (&(objectClass=user)(sAMAccountName=jdoe))
+          attributes: [distinguishedName]
+        fixture: fixtures/200-search-success.ldap
+      - ldap:
+          operation: modify
+          dn: CN=Nonexistent User,OU=Users,DC=corp,DC=example,DC=com
+          changes:
+            - operation: replace
+              modification:
+                givenName: [John]
+        fixture: fixtures/32-modify-user-not-found.ldap
+      - ldap:
+          operation: unbind
+        fixture: fixtures/200-unbind-success.ldap
+    invoke:
+      throws: "No Such Object"
+    error:
+      throws: "Resource not found"
+
+  - name: dry run mode - validate parameters without making changes
+    params:
+      dry_run: true
+    steps: []
+    invoke:
+      returns:
+        status: dry_run_completed
+        updated: false
+
+  - name: update user with password change
+    params:
+      password: NewSecurePassword123!
+      changePasswordAtNextLogin: true
+    steps:
+      - ldap:
+          operation: bind
+          bindDN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+          password: "[MASKED]"
+        fixture: fixtures/200-bind-success.ldap
+      - ldap:
+          operation: search
+          baseDN: DC=corp,DC=example,DC=com
+          scope: sub
+          filter: (&(objectClass=user)(sAMAccountName=jdoe))
+          attributes: [distinguishedName]
+        fixture: fixtures/200-search-success.ldap
+      - ldap:
+          operation: modify
+          dn: CN=John Doe,OU=Users,DC=corp,DC=example,DC=com
+          changes:
+            - operation: replace
+              modification:
+                givenName: [John]
+            - operation: replace
+              modification:
+                sn: [Doe]
+            - operation: replace
+              modification:
+                displayName: [John Doe]
+            - operation: replace
+              modification:
+                mail: [john.doe@corp.example.com]
+            - operation: replace
+              modification:
+                title: [Software Engineer]
+            - operation: replace
+              modification:
+                department: [Engineering]
+            - operation: replace
+              modification:
+                unicodePwd: ["NewSecurePassword123!"]
+            - operation: replace
+              modification:
+                pwdLastSet: ["0"]
+        fixture: fixtures/200-modify-success.ldap
+      - ldap:
+          operation: unbind
+        fixture: fixtures/200-unbind-success.ldap
+    invoke:
+      returns:
+        status: success
+        userDN: CN=John Doe,OU=Users,DC=corp,DC=example,DC=com
+        updated: true
+        address: ldaps://ad.corp.example.com:636
+
+  - name: update user with objectGUID lookup
+    params:
+      objectGUID: 12345678-1234-1234-1234-123456789abc
+      samAccountName: null
+    steps:
+      - ldap:
+          operation: bind
+          bindDN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+          password: "[MASKED]"
+        fixture: fixtures/200-bind-success.ldap
+      - ldap:
+          operation: search
+          baseDN: DC=corp,DC=example,DC=com
+          scope: sub
+          filter: (&(objectClass=user)(objectGUID=\12\34\56\78\12\34\12\34\12\34\12\34\56\78\9a\bc))
+          attributes: [distinguishedName]
+        fixture: fixtures/200-search-success.ldap
+      - ldap:
+          operation: modify
+          dn: CN=John Doe,OU=Users,DC=corp,DC=example,DC=com
+          changes:
+            - operation: replace
+              modification:
+                givenName: [John]
+            - operation: replace
+              modification:
+                sn: [Doe]
+            - operation: replace
+              modification:
+                displayName: [John Doe]
+            - operation: replace
+              modification:
+                mail: [john.doe@corp.example.com]
+            - operation: replace
+              modification:
+                title: [Software Engineer]
+            - operation: replace
+              modification:
+                department: [Engineering]
+        fixture: fixtures/200-modify-success.ldap
+      - ldap:
+          operation: unbind
+        fixture: fixtures/200-unbind-success.ldap
+    invoke:
+      returns:
+        status: success
+        userDN: CN=John Doe,OU=Users,DC=corp,DC=example,DC=com
+        updated: true
+        address: ldaps://ad.corp.example.com:636
+
+  - name: update with additional attributes
+    params:
+      additionalAttributes:
+        telephoneNumber: "+1-555-123-4567"
+        streetAddress: "123 Main St"
+        l: "New York"  # locality/city
+        st: "NY"       # state
+        postalCode: "10001"
+    steps:
+      - ldap:
+          operation: bind
+          bindDN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+          password: "[MASKED]"
+        fixture: fixtures/200-bind-success.ldap
+      - ldap:
+          operation: search
+          baseDN: DC=corp,DC=example,DC=com
+          scope: sub
+          filter: (&(objectClass=user)(sAMAccountName=jdoe))
+          attributes: [distinguishedName]
+        fixture: fixtures/200-search-success.ldap
+      - ldap:
+          operation: modify
+          dn: CN=John Doe,OU=Users,DC=corp,DC=example,DC=com
+          changes:
+            - operation: replace
+              modification:
+                givenName: [John]
+            - operation: replace
+              modification:
+                sn: [Doe]
+            - operation: replace
+              modification:
+                displayName: [John Doe]
+            - operation: replace
+              modification:
+                mail: [john.doe@corp.example.com]
+            - operation: replace
+              modification:
+                title: [Software Engineer]
+            - operation: replace
+              modification:
+                department: [Engineering]
+            - operation: replace
+              modification:
+                telephoneNumber: ["+1-555-123-4567"]
+            - operation: replace
+              modification:
+                streetAddress: ["123 Main St"]
+            - operation: replace
+              modification:
+                l: ["New York"]
+            - operation: replace
+              modification:
+                st: ["NY"]
+            - operation: replace
+              modification:
+                postalCode: ["10001"]
+        fixture: fixtures/200-modify-success.ldap
+      - ldap:
+          operation: unbind
+        fixture: fixtures/200-unbind-success.ldap
+    invoke:
+      returns:
+        status: success
+        userDN: CN=John Doe,OU=Users,DC=corp,DC=example,DC=com
+        updated: true
+        address: ldaps://ad.corp.example.com:636
+  - name: invalid attribute name
+    steps:
+      - ldap:
+          operation: bind
+          bindDN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+          password: "[MASKED]"
+        fixture: fixtures/200-bind-success.ldap
+      - ldap:
+          operation: search
+          baseDN: DC=corp,DC=example,DC=com
+          scope: sub
+          filter: (&(objectClass=user)(sAMAccountName=jdoe))
+          attributes: [distinguishedName]
+        fixture: fixtures/200-search-success.ldap
+      - ldap:
+          operation: modify
+          dn: CN=John Doe,OU=Users,DC=corp,DC=example,DC=com
+          changes:
+            - operation: replace
+              modification:
+                invalidAttribute123: [John]
+        fixture: fixtures/16-modify-invalid-attribute.ldap
+      - ldap:
+          operation: unbind
+        fixture: fixtures/200-unbind-success.ldap
+    invoke:
+      throws: "No such attribute"
+    error:
+      throws: "Invalid attribute name"
+
+  - name: update user with numeric values in string fields
+    params:
+      department: 123
+      title: 456
+    steps:
+      - ldap:
+          operation: bind
+          bindDN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+          password: "[MASKED]"
+        fixture: fixtures/200-bind-success.ldap
+      - ldap:
+          operation: search
+          baseDN: DC=corp,DC=example,DC=com
+          scope: sub
+          filter: (&(objectClass=user)(sAMAccountName=jdoe))
+          attributes: [distinguishedName]
+        fixture: fixtures/200-search-success.ldap
+      - ldap:
+          operation: modify
+          dn: CN=John Doe,OU=Users,DC=corp,DC=example,DC=com
+          changes:
+            - operation: replace
+              modification:
+                givenName: [John]
+            - operation: replace
+              modification:
+                sn: [Doe]
+            - operation: replace
+              modification:
+                displayName: [John Doe]
+            - operation: replace
+              modification:
+                mail: [john.doe@corp.example.com]
+            - operation: replace
+              modification:
+                department: ["123"]
+            - operation: replace
+              modification:
+                title: ["456"]
+        fixture: fixtures/200-modify-success.ldap
+      - ldap:
+          operation: unbind
+        fixture: fixtures/200-unbind-success.ldap
+    invoke:
+      returns:
+        status: success
+        userDN: CN=John Doe,OU=Users,DC=corp,DC=example,DC=com
+        updated: true
+        address: ldaps://ad.corp.example.com:636
