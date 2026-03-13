@@ -62,7 +62,7 @@ scenarios:
       returns:
         status: success
         userDN: CN=John Doe,OU=Users,DC=corp,DC=example,DC=com
-        updated: true
+        modified: true
         address: ldaps://ad.corp.example.com:636
 
   - name: user not found
@@ -188,7 +188,7 @@ scenarios:
     invoke:
       returns:
         status: dry_run_completed
-        updated: false
+        modified: false
 
   - name: update user with password change
     params:
@@ -243,7 +243,7 @@ scenarios:
       returns:
         status: success
         userDN: CN=John Doe,OU=Users,DC=corp,DC=example,DC=com
-        updated: true
+        modified: true
         address: ldaps://ad.corp.example.com:636
 
   - name: update user with objectGUID lookup
@@ -293,7 +293,7 @@ scenarios:
       returns:
         status: success
         userDN: CN=John Doe,OU=Users,DC=corp,DC=example,DC=com
-        updated: true
+        modified: true
         address: ldaps://ad.corp.example.com:636
 
   - name: update with additional attributes
@@ -362,7 +362,7 @@ scenarios:
       returns:
         status: success
         userDN: CN=John Doe,OU=Users,DC=corp,DC=example,DC=com
-        updated: true
+        modified: true
         address: ldaps://ad.corp.example.com:636
   - name: invalid attribute name
     steps:
@@ -441,5 +441,5 @@ scenarios:
       returns:
         status: success
         userDN: CN=John Doe,OU=Users,DC=corp,DC=example,DC=com
-        updated: true
+        modified: true
         address: ldaps://ad.corp.example.com:636
