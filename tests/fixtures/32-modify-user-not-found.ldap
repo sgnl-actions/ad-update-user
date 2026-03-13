@@ -1,0 +1,9 @@
+# User not found during modify operation (LDAP error code 32)
+operation: modify
+result: error
+code: 32
+message: "No Such Object"
+error:
+  name: "LDAPError"
+  code: 32
+  message: "No Such Object - The specified user does not exist"

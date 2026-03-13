@@ -276,8 +276,10 @@ export default {
       connectTimeout: 10000
     };
 
-    // Configure TLS options for secure connections
-    if (address.startsWith('ldaps://') || context.environment?.TLS_SKIP_VERIFY === 'true') {
+    // Configure TLS options only for LDAPS connections
+    // TLS_SKIP_VERIFY controls certificate validation for LDAPS but should not
+    // enable TLS for plain LDAP connections (which would cause connection failures)
+    if (address.startsWith('ldaps://')) {
       clientOptions.tlsOptions = {
         rejectUnauthorized: context.environment?.TLS_SKIP_VERIFY !== 'true'
       };
@@ -357,9 +359,11 @@ export default {
       throw new Error(`Multiple users found: ${error.message}`);
     }
 
-    // Constraint violations (fatal - don't retry)
+    // Constraint violations and invalid attributes (fatal - don't retry)
     if (errorMessage.includes('constraint violation') ||
-        errorMessage.includes('invalid syntax')) {
+        errorMessage.includes('invalid syntax') ||
+        errorMessage.includes('no such attribute') ||
+        errorMessage.includes('error in attribute conversion operation')) {
       console.error('Data validation error - check input parameters');
       throw new Error(`Invalid attribute data: ${error.message}`);
     }

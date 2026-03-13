@@ -28,16 +28,16 @@ const mockContext = {
 
 // Action-specific parameters - customize these for your test
 const mockParams = {
-  baseDN: 'DC=corp,DC=example,DC=com',
-  samAccountName: 'jsmith',
-  // objectGUID: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', // Use instead of samAccountName when renaming
-  firstName: 'John',
-  lastName: 'Smith',
-  email: 'john.smith@example.com',
-  department: 'Engineering',
-  title: 'Software Engineer',
+  baseDN: process.env.BASE_DN || 'DC=corp,DC=example,DC=com',
+  samAccountName: process.env.SAM_ACCOUNT_NAME || 'jsmith',
+  // objectGUID: process.env.OBJECT_GUID, // Use instead of samAccountName when renaming
+  firstName: process.env.FIRST_NAME || 'John',
+  lastName: process.env.LAST_NAME || 'Smith',
+  email: process.env.EMAIL || 'john.smith@example.com',
+  department: process.env.DEPARTMENT || 'Engineering',
+  title: process.env.TITLE || 'Software Engineer',
   additionalAttributes: {
-    telephoneNumber: '+1-555-0100'
+    telephoneNumber: process.env.TELEPHONE_NUMBER || '+1-555-0100'
   },
   dry_run: process.env.DRY_RUN === 'true'
 };

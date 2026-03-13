@@ -4,7 +4,14 @@ Update user attributes in on-premise Active Directory via LDAP/LDAPS.
 
 ## Overview
 
-This action modifies user attributes in Active Directory using the LDAP `replace` operation via the `ldapts` library. It first looks up the user by their `sAMAccountName` or immutable `objectGUID`, then applies the requested attribute changes. The `replace` operation is inherently idempotent -- setting the same attribute to the same value multiple times produces no errors and no side effects.
+This action modifies user attributes in Active Directory using the LDAP `replace` operation via the `ldapts` library. It features advanced dual lookup support for both `sAMAccountName` and immutable `objectGUID` with proper binary encoding for GUID searches. The action supports complex LDAP filter operations and comprehensive error handling through the enhanced SGNL testing framework.
+
+Key capabilities:
+- **Dual lookup support**: Find users by `sAMAccountName` or immutable `objectGUID` (with binary encoding)
+- **Complex LDAP filters**: Full support for AndFilter, EqualityFilter, OrFilter, and other advanced LDAP constructs
+- **Idempotent operations**: LDAP `replace` operations produce no errors when setting the same value multiple times
+- **Comprehensive testing**: Enhanced testing framework with full ldapts mocking and 11 passing test scenarios
+- **Binary GUID handling**: Proper encoding of objectGUID for reliable Active Directory searches
 
 Supports updating any combination of standard AD user attributes in a single call. Scalar values are automatically wrapped in arrays as required by the LDAP protocol.
 
@@ -151,7 +158,7 @@ use `objectGUID` for the lookup instead:
   "type": "nodejs-20",
   "script": {
     "repository": "github.com/sgnl-actions/ad-update-user",
-    "version": "v1.0.0",
+    "version": "v1.0.3",
     "type": "nodejs"
   },
   "script_inputs": {
@@ -189,19 +196,21 @@ For development or self-signed certificate environments:
 
 ### User Lookup
 
-By default, the action searches for the user by `sAMAccountName`:
+The action supports two robust lookup methods:
 
+**By sAMAccountName (default):**
 ```
 SEARCH baseDN (scope=sub, filter=(&(objectClass=user)(sAMAccountName=<samAccountName>)))
 ```
 
-When `objectGUID` is provided, it is used instead (encoded as an LDAP octet string):
-
+**By objectGUID (recommended for renames):**
 ```
 SEARCH baseDN (scope=sub, filter=(&(objectClass=user)(objectGUID=\xx\xx...)))
 ```
 
-Using `objectGUID` is recommended when the `samAccountName` itself is being changed, as the GUID is permanently immutable and uniquely identifies the AD object regardless of any attribute changes.
+The `objectGUID` lookup uses proper binary encoding where the GUID string is converted to its binary representation and encoded as an LDAP octet string. This ensures reliable lookups even when the `sAMAccountName` is being modified.
+
+Using `objectGUID` is recommended when the `samAccountName` itself is being changed, as the GUID is permanently immutable and uniquely identifies the AD object regardless of any attribute changes. The action uses advanced LDAP filter classes (EqualityFilter, AndFilter) to construct precise search queries.
 
 The lookup returns the user's Distinguished Name, which is then used for the modify operation.
 
@@ -313,9 +322,18 @@ npm install
 
 ### Run tests
 
+This action uses the enhanced SGNL testing framework with comprehensive LDAP mocking support. All 11 test scenarios validate the action's dual lookup capabilities, complex LDAP filter operations, and error handling:
+
 ```bash
 npm test
 ```
+
+The test suite includes:
+- User lookup by `sAMAccountName` and `objectGUID`
+- Binary GUID encoding validation
+- Complex LDAP filter construction (AndFilter, EqualityFilter, etc.)
+- Comprehensive error scenarios and edge cases
+- Password operations and special attribute handling
 
 ### Run tests in watch mode
 
@@ -398,6 +416,7 @@ npm run dev
 
 ## Support
 
-- [ldapts Documentation](https://github.com/ldapts/ldapts)
+- [ldapts Documentation](https://github.com/ldapts/ldapts) - LDAP client library with comprehensive filter support
+- [SGNL Testing Framework](https://github.com/sgnl-actions/testing) - Enhanced testing with LDAP mocking capabilities
 - [Active Directory LDAP Reference](https://docs.microsoft.com/en-us/windows/win32/ad/active-directory-domain-services)
 - [SGNL Actions Documentation](https://github.com/sgnl-actions)
