@@ -12,8 +12,8 @@ action:
     dry_run: false
   context:
     secrets:
-      LDAP_BIND_DN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
-      LDAP_BIND_PASSWORD: ServicePassword123!
+      LDAP_BIND_DN: CN=svc-sgnl,OU=Service Accounts,DC=corp,DC=example,DC=com
+      LDAP_BIND_PASSWORD: test-password
     environment:
       ADDRESS: ldaps://ad.corp.example.com:636
 
@@ -22,7 +22,7 @@ scenarios:
     steps:
       - ldap:
           operation: bind
-          bindDN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+          bindDN: CN=svc-sgnl,OU=Service Accounts,DC=corp,DC=example,DC=com
           password: "[MASKED]"
         fixture: fixtures/200-bind-success.ldap
       - ldap:
@@ -69,7 +69,7 @@ scenarios:
     steps:
       - ldap:
           operation: bind
-          bindDN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+          bindDN: CN=svc-sgnl,OU=Service Accounts,DC=corp,DC=example,DC=com
           password: "[MASKED]"
         fixture: fixtures/200-bind-success.ldap
       - ldap:
@@ -91,7 +91,7 @@ scenarios:
     steps:
       - ldap:
           operation: bind
-          bindDN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+          bindDN: CN=svc-sgnl,OU=Service Accounts,DC=corp,DC=example,DC=com
           password: "[MASKED]"
         fixture: fixtures/200-bind-success.ldap
       - ldap:
@@ -113,7 +113,7 @@ scenarios:
     steps:
       - ldap:
           operation: bind
-          bindDN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+          bindDN: CN=svc-sgnl,OU=Service Accounts,DC=corp,DC=example,DC=com
           password: "[MASKED]"
         fixture: fixtures/49-bind-error.ldap
     invoke:
@@ -125,7 +125,7 @@ scenarios:
     steps:
       - ldap:
           operation: bind
-          bindDN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+          bindDN: CN=svc-sgnl,OU=Service Accounts,DC=corp,DC=example,DC=com
           password: "[MASKED]"
         fixture: fixtures/200-bind-success.ldap
       - ldap:
@@ -155,7 +155,7 @@ scenarios:
     steps:
       - ldap:
           operation: bind
-          bindDN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+          bindDN: CN=svc-sgnl,OU=Service Accounts,DC=corp,DC=example,DC=com
           password: "[MASKED]"
         fixture: fixtures/200-bind-success.ldap
       - ldap:
@@ -197,7 +197,7 @@ scenarios:
     steps:
       - ldap:
           operation: bind
-          bindDN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+          bindDN: CN=svc-sgnl,OU=Service Accounts,DC=corp,DC=example,DC=com
           password: "[MASKED]"
         fixture: fixtures/200-bind-success.ldap
       - ldap:
@@ -253,7 +253,7 @@ scenarios:
     steps:
       - ldap:
           operation: bind
-          bindDN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+          bindDN: CN=svc-sgnl,OU=Service Accounts,DC=corp,DC=example,DC=com
           password: "[MASKED]"
         fixture: fixtures/200-bind-success.ldap
       - ldap:
@@ -307,7 +307,7 @@ scenarios:
     steps:
       - ldap:
           operation: bind
-          bindDN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+          bindDN: CN=svc-sgnl,OU=Service Accounts,DC=corp,DC=example,DC=com
           password: "[MASKED]"
         fixture: fixtures/200-bind-success.ldap
       - ldap:
@@ -368,7 +368,7 @@ scenarios:
     steps:
       - ldap:
           operation: bind
-          bindDN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+          bindDN: CN=svc-sgnl,OU=Service Accounts,DC=corp,DC=example,DC=com
           password: "[MASKED]"
         fixture: fixtures/200-bind-success.ldap
       - ldap:
@@ -401,7 +401,7 @@ scenarios:
     steps:
       - ldap:
           operation: bind
-          bindDN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+          bindDN: CN=svc-sgnl,OU=Service Accounts,DC=corp,DC=example,DC=com
           password: "[MASKED]"
         fixture: fixtures/200-bind-success.ldap
       - ldap:
