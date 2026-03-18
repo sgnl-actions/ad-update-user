@@ -12,8 +12,8 @@ action:
     dry_run: false
   context:
     secrets:
-      LDAP_BIND_DN: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
-      LDAP_BIND_PASSWORD: ServicePassword123!
+      BASIC_USERNAME: CN=service,OU=ServiceAccounts,DC=corp,DC=example,DC=com
+      BASIC_PASSWORD: ServicePassword123!
     environment:
       ADDRESS: ldaps://ad.corp.example.com:636
 
