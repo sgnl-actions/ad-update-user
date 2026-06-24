@@ -5,10 +5,10 @@ code: 0
 message: "Success"
 searchEntries:
   - dn: "CN=John Doe,OU=Users,DC=corp,DC=example,DC=com"
-    attributes:
-      distinguishedName: "CN=John Doe,OU=Users,DC=corp,DC=example,DC=com"
-      sAMAccountName: "jdoe"
+    objectClass: ["top", "person", "organizationalPerson", "user"]
+    sAMAccountName: ["jdoe"]
+    objectGUID: ["12345678-1234-1234-1234-123456789abc"]
   - dn: "CN=John Doe Duplicate,OU=Users,DC=corp,DC=example,DC=com"
-    attributes:
-      distinguishedName: "CN=John Doe Duplicate,OU=Users,DC=corp,DC=example,DC=com"
-      sAMAccountName: "jdoe"
+    objectClass: ["top", "person", "organizationalPerson", "user"]
+    sAMAccountName: ["jdoe"]
+    objectGUID: ["87654321-4321-4321-4321-cba987654321"]
