@@ -3,7 +3,7 @@ operation: search
 result: success
 code: 0
 message: "Success"
-entries:
+searchEntries:
   - dn: "CN=John Doe,OU=Users,DC=corp,DC=example,DC=com"
     objectClass: ["top", "person", "organizationalPerson", "user"]
     sAMAccountName: ["jdoe"]
