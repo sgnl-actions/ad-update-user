@@ -36,7 +36,6 @@ Supports updating any combination of standard AD user attributes in a single cal
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `ADDRESS` | LDAP/LDAPS URL of the Domain Controller (e.g., `ldaps://dc.example.com:636`) | Required |
-| `TLS_SKIP_VERIFY` | Set to `true` to skip TLS certificate verification | `false` |
 
 ### Input Parameters
 
@@ -58,6 +57,7 @@ Supports updating any combination of standard AD user attributes in a single cal
 | `changePasswordAtNextLogin` | boolean | No | Force the user to change password at next login (sets `pwdLastSet` to `0`) | `true` |
 | `additionalAttributes` | object | No | Key-value pairs of additional LDAP attributes to set | `{"telephoneNumber": "+1-555-0100", "physicalDeliveryOfficeName": "Building A"}` |
 | `dry_run` | boolean | No | When true, validates parameters without making changes | `false` |
+| `tlsSkipVerify` | boolean | No | Skip TLS certificate verification (use only for self-signed certificates) | `true` |
 | `address` | text | No | Optional LDAP server URL override | `ldaps://ad.corp.example.com:636` |
 
 At least one of `samAccountName` or `objectGUID` must be provided for user lookup. When `objectGUID` is provided, it takes precedence and is used for the LDAP search.
@@ -173,21 +173,19 @@ use `objectGUID` for the lookup instead:
     }
   },
   "environment": {
-    "ADDRESS": "ldaps://dc.example.com:636",
-    "TLS_SKIP_VERIFY": "false"
+    "ADDRESS": "ldaps://dc.example.com:636"
   }
 }
 ```
 
 ### Skip TLS Verification
 
-For development or self-signed certificate environments:
+For development or self-signed certificate environments, add `tlsSkipVerify` to your script inputs:
 
 ```json
 {
-  "environment": {
-    "ADDRESS": "ldaps://dc.dev.example.com:636",
-    "TLS_SKIP_VERIFY": "true"
+  "script_inputs": {
+    "tlsSkipVerify": true
   }
 }
 ```
@@ -307,7 +305,7 @@ Multi-valued attributes (e.g., `otherTelephone`, `proxyAddresses`) can be passed
 
 - Use LDAPS (port 636) in production to encrypt credentials and data in transit
 - LDAPS is **required** for password changes -- AD rejects `unicodePwd` modifications over unencrypted LDAP
-- Only skip TLS verification (`TLS_SKIP_VERIFY=true`) in development environments
+- Only set \`tlsSkipVerify: true\` in development environments
 - The service account should have minimal permissions -- only Write access on the specific user attributes needed
 - Attribute values are not logged; only attribute names appear in the output to avoid leaking sensitive data
 - Special characters in sAMAccountName are escaped to prevent LDAP injection
@@ -368,7 +366,7 @@ Create a `../.env` file with your AD credentials:
 ADDRESS=ldap://your-dc.example.com:389
 BASIC_USERNAME=CN=admin,DC=example,DC=com
 BASIC_PASSWORD=your-password
-TLS_SKIP_VERIFY=false
+TLS_SKIP_VERIFY=false  # Used as tlsSkipVerify input parameter
 ```
 
 Then run:
@@ -389,7 +387,7 @@ npm run dev
 
 - Verify the Domain Controller is reachable: `telnet dc.example.com 636`
 - Check that the `ADDRESS` environment variable includes the protocol and port: `ldaps://dc.example.com:636`
-- For LDAPS, ensure the DC's certificate is trusted or set `TLS_SKIP_VERIFY=true` for testing
+- For LDAPS, ensure the DC's certificate is trusted or set `tlsSkipVerify: true` in inputs for testing
 
 ### Authentication Failures
 
