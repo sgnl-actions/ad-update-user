@@ -277,11 +277,11 @@ export default {
     };
 
     // Configure TLS options only for LDAPS connections
-    // TLS_SKIP_VERIFY controls certificate validation for LDAPS but should not
+    // tlsSkipVerify controls certificate validation for LDAPS but should not
     // enable TLS for plain LDAP connections (which would cause connection failures)
     if (address.startsWith('ldaps://')) {
       clientOptions.tlsOptions = {
-        rejectUnauthorized: context.environment?.TLS_SKIP_VERIFY !== 'true'
+        rejectUnauthorized: params.tlsSkipVerify !== true && params.tlsSkipVerify !== 'true'
       };
     }
 
